@@ -1,22 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, PieChart, Calendar, TrendingUp, DollarSign, CreditCard, User } from 'lucide-react';
+import { BarChart3, PieChart, Calendar, TrendingUp, DollarSign, CreditCard } from 'lucide-react';
 
 const Reports = () => {
-  const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, products, payments
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [sales, setSales] = useState([]);
   const [stats, setStats] = useState({ total: 0, count: 0, avg: 0, byMethod: {}, byProduct: [] });
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const { ipcRenderer } = window.require('electron');
-        const data = await ipcRenderer.invoke('get-sales');
-        setSales(data);
-        calculateStats(data);
-      } catch (err) { console.error(err); }
-    };
     loadData();
   }, []);
+
+  const loadData = async () => {
+    try {
+      const { ipcRenderer } = window.require('electron');
+      const data = await ipcRenderer.invoke('get-sales');
+      setSales(data);
+      calculateStats(data);
+    } catch (err) { console.error(err); }
+  };
 
   const calculateStats = (data) => {
     let total = 0;
@@ -24,22 +25,24 @@ const Reports = () => {
     let productMap = {};
 
     data.forEach(sale => {
-      total += sale.total;
-      if (byMethod[sale.paymentMethod] !== undefined) {
-        byMethod[sale.paymentMethod] += sale.total;
+      total += sale.total_amount;
+      const method = sale.payment_method || 'cash';
+      if (byMethod[method] !== undefined) {
+        byMethod[method] += sale.total_amount;
       }
       
-      // Mahsulotlar bo'yicha
-      if (sale.items && Array.isArray(sale.items)) {
-        sale.items.forEach(item => {
+      // Mahsulotlarni JSON dan o'qish
+      try {
+        const items = JSON.parse(sale.items_json || '[]');
+        items.forEach(item => {
           if (!productMap[item.product_name]) productMap[item.product_name] = { qty: 0, revenue: 0 };
           productMap[item.product_name].qty += item.quantity;
           productMap[item.product_name].revenue += (item.price * item.quantity);
         });
-      }
+      } catch (e) {}
     });
 
-    // Mahsulotlarni saralash (Eng ko'p pul keltirgani bo'yicha)
+    // Top mahsulotlarni saralash
     const byProduct = Object.entries(productMap)
       .map(([name, val]) => ({ name, ...val }))
       .sort((a, b) => b.revenue - a.revenue);
@@ -53,12 +56,11 @@ const Reports = () => {
     });
   };
 
-  // Oddiy foiz hisoblash
   const getPercent = (val) => stats.total ? Math.round((val / stats.total) * 100) : 0;
 
   return (
     <div className="flex w-full h-full bg-gray-100">
-      {/* 2-QISM: MENYU (Sidebar stili) */}
+      {/* SIDEBAR */}
       <div className="w-72 bg-white border-r border-gray-200 flex flex-col h-full p-4 shadow-sm z-10">
         <h2 className="text-xl font-bold text-gray-800 mb-6 px-2">Xisobotlar</h2>
         <div className="space-y-2">
@@ -71,35 +73,30 @@ const Reports = () => {
         </div>
       </div>
 
-      {/* 3-QISM: KONTENT */}
+      {/* CONTENT */}
       <div className="flex-1 overflow-y-auto p-8">
-        
-        {/* DASHBOARD VIEW */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
-             {/* KPI CARDS */}
+             {/* CARDS */}
              <div className="grid grid-cols-3 gap-6">
                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="p-3 bg-green-50 text-green-600 rounded-xl"><DollarSign size={24}/></div>
-                    <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded">+100%</span>
-                  </div>
+                  <div className="p-3 bg-green-50 text-green-600 rounded-xl w-fit mb-4"><DollarSign size={24}/></div>
                   <p className="text-gray-400 text-sm">Jami Savdo</p>
                   <h3 className="text-3xl font-bold text-gray-800">{stats.total.toLocaleString()}</h3>
                </div>
                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                  <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><CreditCard size={24}/></div>
-                  <p className="text-gray-400 text-sm mt-4">Cheklar Soni</p>
+                  <div className="p-3 bg-blue-50 text-blue-600 rounded-xl w-fit mb-4"><CreditCard size={24}/></div>
+                  <p className="text-gray-400 text-sm">Cheklar Soni</p>
                   <h3 className="text-3xl font-bold text-gray-800">{stats.count}</h3>
                </div>
                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                  <div className="p-3 bg-orange-50 text-orange-600 rounded-xl"><TrendingUp size={24}/></div>
-                  <p className="text-gray-400 text-sm mt-4">O'rtacha Chek</p>
+                  <div className="p-3 bg-orange-50 text-orange-600 rounded-xl w-fit mb-4"><TrendingUp size={24}/></div>
+                  <p className="text-gray-400 text-sm">O'rtacha Chek</p>
                   <h3 className="text-3xl font-bold text-gray-800">{Math.round(stats.avg).toLocaleString()}</h3>
                </div>
              </div>
 
-             {/* PAYMENT METHODS */}
+             {/* TO'LOV TURLARI */}
              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                 <h3 className="font-bold text-lg mb-6">To'lov Turlari</h3>
                 <div className="space-y-4">
@@ -124,7 +121,6 @@ const Reports = () => {
           </div>
         )}
 
-        {/* PRODUCTS VIEW */}
         {activeTab === 'products' && (
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
              <h3 className="font-bold text-lg mb-6">Top Sotilgan Mahsulotlar</h3>
@@ -149,7 +145,6 @@ const Reports = () => {
              </table>
           </div>
         )}
-
       </div>
     </div>
   );

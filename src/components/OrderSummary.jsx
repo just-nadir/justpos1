@@ -58,29 +58,34 @@ const OrderSummary = ({ table, onDeselect }) => {
   const finalTotal = preTotal - discountAmount;
 
   // --- TO'LOV QILISH ---
+  // --- YANGILANDI: CHECKOUT ---
   const handlePaymentSuccess = async (method) => {
     if (!table) return;
     try {
       const { ipcRenderer } = window.require('electron');
       
-      // 1. Agar Nasiya bo'lsa, qarz yozamiz
-      if (method === 'debt' && selectedCustomer) {
-        await ipcRenderer.invoke('add-debt', {
-            customerId: selectedCustomer.id,
-            amount: finalTotal,
-            comment: `Buyurtma: ${table.name}`
-        });
-      }
+      // Ma'lumotlarni yig'amiz
+      const paymentData = {
+        total: finalTotal,
+        subtotal,
+        service,
+        discount: discountAmount,
+        paymentMethod: method,
+        customerId: selectedCustomer ? selectedCustomer.id : null,
+        tableName: table.name,
+        items: orderItems // Buni backendda json qilib saqlaymiz
+      };
 
-      // 2. Stolni yopamiz (Barcha to'lov turlarida)
-      await ipcRenderer.invoke('close-table', table.id);
+      // Backendga to'liq checkout buyrug'ini beramiz
+      await ipcRenderer.invoke('checkout', { 
+         tableId: table.id, 
+         paymentData 
+      });
       
       setIsPaymentModalOpen(false);
       if (onDeselect) onDeselect();
 
-    } catch (error) {
-      console.error(error);
-    }
+    } catch (error) { console.error(error); }
   };
   
   const handleBonusChange = (e) => {

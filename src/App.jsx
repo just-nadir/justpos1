@@ -25,7 +25,7 @@ function App() {
       case 'tables': return <TablesManagement />;
       case 'customers': return <CustomersManagement />;
       case 'debtors': return <DebtorsManagement />; // YANGI
-      case 'history': return <div className="flex-1 p-10 text-center text-gray-500 font-bold">Tarix sahifasi (Tez orada)</div>;
+      case 'reports': return <Reports />;
       default: return <div>Sahifa topilmadi</div>;
     }
   };

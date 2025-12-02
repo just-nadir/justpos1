@@ -9,7 +9,7 @@ const Sidebar = ({ activePage, onNavigate }) => {
     { id: 'tables', icon: <Square size={24} />, label: "Zallar" },
     { id: 'customers', icon: <Users size={24} />, label: "Mijozlar" },
     { id: 'debtors', icon: <FileText size={24} />, label: "Qarzdorlar" }, // YANGI
-    { id: 'history', icon: <History size={24} />, label: "Tarix" },
+    { id: 'reports', icon: <PieChart size={24} />, label: "Xisobotlar" },
     { id: 'settings', icon: <Settings size={24} />, label: "Sozlamalar" },
   ];
 
