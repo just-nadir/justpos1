@@ -6,116 +6,124 @@ const dbPath = path.join(app.getAppPath(), 'pos.db');
 const db = new Database(dbPath, { verbose: console.log });
 
 function initDB() {
-  // 1. Jadvallar (Avvalgilari o'zgarishsiz qoladi)
+  // ... (Eski jadvallar: halls, tables, customers, debt_history, categories... bular turibdi)
   db.exec(`CREATE TABLE IF NOT EXISTS halls (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)`);
-  
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS tables (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      hall_id INTEGER,
-      name TEXT NOT NULL,
-      status TEXT DEFAULT 'free',
-      guests INTEGER DEFAULT 0,
-      start_time TEXT,
-      total_amount REAL DEFAULT 0,
-      FOREIGN KEY(hall_id) REFERENCES halls(id) ON DELETE CASCADE
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS customers (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      phone TEXT,
-      type TEXT DEFAULT 'standard',
-      value INTEGER DEFAULT 0,
-      balance REAL DEFAULT 0,
-      birthday TEXT,
-      debt REAL DEFAULT 0
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS debt_history (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      customer_id INTEGER,
-      amount REAL,
-      type TEXT,
-      date TEXT,
-      comment TEXT,
-      FOREIGN KEY(customer_id) REFERENCES customers(id)
-    )
-  `);
-
+  db.exec(`CREATE TABLE IF NOT EXISTS tables (id INTEGER PRIMARY KEY AUTOINCREMENT, hall_id INTEGER, name TEXT NOT NULL, status TEXT DEFAULT 'free', guests INTEGER DEFAULT 0, start_time TEXT, total_amount REAL DEFAULT 0, FOREIGN KEY(hall_id) REFERENCES halls(id) ON DELETE CASCADE)`);
+  db.exec(`CREATE TABLE IF NOT EXISTS customers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, phone TEXT, type TEXT DEFAULT 'standard', value INTEGER DEFAULT 0, balance REAL DEFAULT 0, birthday TEXT, debt REAL DEFAULT 0)`);
+  db.exec(`CREATE TABLE IF NOT EXISTS debt_history (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER, amount REAL, type TEXT, date TEXT, comment TEXT, FOREIGN KEY(customer_id) REFERENCES customers(id))`);
   db.exec(`CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)`);
   
+  // PRODUCTS (destination endi oshxona ID sini saqlaydi)
   db.exec(`
     CREATE TABLE IF NOT EXISTS products (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       category_id INTEGER,
       name TEXT NOT NULL,
       price REAL NOT NULL,
-      destination TEXT DEFAULT 'kitchen',
+      destination TEXT, -- Bu yerga endi kitchen_id yoziladi (masalan: "1")
       is_active INTEGER DEFAULT 1,
       image TEXT,
       FOREIGN KEY(category_id) REFERENCES categories(id)
     )
   `);
+  
+  db.exec(`CREATE TABLE IF NOT EXISTS order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, table_id INTEGER, product_name TEXT, price REAL, quantity INTEGER, destination TEXT, FOREIGN KEY(table_id) REFERENCES tables(id))`);
+  db.exec(`CREATE TABLE IF NOT EXISTS sales (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, total_amount REAL, subtotal REAL, discount REAL, payment_method TEXT, customer_id INTEGER, items_json TEXT)`);
+  db.exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
 
+  // --- YANGI: OSHXONALAR JADVALI ---
   db.exec(`
-    CREATE TABLE IF NOT EXISTS order_items (
+    CREATE TABLE IF NOT EXISTS kitchens (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      table_id INTEGER,
-      product_name TEXT,
-      price REAL,
-      quantity INTEGER,
-      destination TEXT,
-      FOREIGN KEY(table_id) REFERENCES tables(id)
+      name TEXT NOT NULL,
+      printer_ip TEXT,       -- LAN Printer IP manzili (masalan: 192.168.1.200)
+      printer_port INTEGER DEFAULT 9100
     )
   `);
 
-  // --- YANGI JADVAL: SAVDOLAR TARIXI (Xisobot uchun) ---
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS sales (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      date TEXT,              -- Sotilgan vaqt
-      total_amount REAL,      -- Jami summa (chegirmadan keyin)
-      subtotal REAL,          -- Chegirmasiz summa
-      discount REAL,          -- Chegirma summasi
-      payment_method TEXT,    -- 'cash', 'card', 'click', 'debt'
-      customer_id INTEGER,    -- Agar mijoz tanlangan bo'lsa
-      items_json TEXT         -- Sotilgan tovarlar ro'yxati (JSON formatda)
-    )
-  `);
-
-  // --- DUMMY DATA ---
+  // --- DEFAULT DATA ---
+  const stmtK = db.prepare('SELECT count(*) as count FROM kitchens');
+  if (stmtK.get().count === 0) {
+     // Boshlanishiga 3 ta standart bo'lim qo'shamiz
+     const insertK = db.prepare('INSERT INTO kitchens (name, printer_ip) VALUES (?, ?)');
+     insertK.run('Oshxona', '192.168.1.200');
+     insertK.run('Bar', '192.168.1.201');
+     insertK.run('Mangal', '192.168.1.202');
+  }
+  
+  // (Qolgan dummy data...)
   const stmtHalls = db.prepare('SELECT count(*) as count FROM halls');
   if (stmtHalls.get().count === 0) {
     const hall1 = db.prepare("INSERT INTO halls (name) VALUES ('Asosiy Zal')").run().lastInsertRowid;
     db.prepare("INSERT INTO tables (hall_id, name) VALUES (?, 'Stol 1')").run(hall1);
     db.prepare("INSERT INTO categories (name) VALUES ('Taomlar')").run();
-    db.prepare("INSERT INTO products (category_id, name, price) VALUES (1, 'Osh', 65000)").run();
+    // Default mahsulot (destination = 1 ya'ni Oshxona)
+    db.prepare("INSERT INTO products (category_id, name, price, destination) VALUES (1, 'Osh', 65000, '1')").run();
   }
 }
 
 const dbManager = {
   init: initDB,
   
-  // Getters
+  // ... (Eski getterlar)
   getHalls: () => db.prepare('SELECT * FROM halls').all(),
   getTables: () => db.prepare('SELECT * FROM tables').all(),
   getTablesByHall: (id) => db.prepare('SELECT * FROM tables WHERE hall_id = ?').all(id),
   getCustomers: () => db.prepare('SELECT * FROM customers').all(),
   getCategories: () => db.prepare('SELECT * FROM categories').all(),
-  getProducts: () => db.prepare('SELECT products.*, categories.name as category_name FROM products LEFT JOIN categories ON products.category_id = categories.id').all(),
+  
+  // YANGILANDI: Products endi Oshxona nomi bilan keladi
+  getProducts: () => db.prepare(`
+    SELECT p.*, c.name as category_name, k.name as kitchen_name 
+    FROM products p 
+    LEFT JOIN categories c ON p.category_id = c.id 
+    LEFT JOIN kitchens k ON p.destination = CAST(k.id AS TEXT)
+  `).all(),
+
   getTableItems: (id) => db.prepare('SELECT * FROM order_items WHERE table_id = ?').all(id),
   getDebtors: () => db.prepare('SELECT * FROM customers WHERE debt > 0').all(),
   getDebtHistory: (id) => db.prepare('SELECT * FROM debt_history WHERE customer_id = ? ORDER BY id DESC').all(id),
+  
+  getSales: (startDate, endDate) => {
+    if (!startDate || !endDate) return db.prepare('SELECT * FROM sales ORDER BY date DESC LIMIT 100').all();
+    return db.prepare('SELECT * FROM sales WHERE date >= ? AND date <= ? ORDER BY date DESC').all(startDate, endDate);
+  },
 
-  // YANGI: Xisobot uchun savdolarni olish
-  getSales: (limit = 100) => db.prepare('SELECT * FROM sales ORDER BY id DESC LIMIT ?').all(limit),
+  getSettings: () => {
+    const rows = db.prepare('SELECT * FROM settings').all();
+    return rows.reduce((acc, row) => { acc[row.key] = row.value; return acc; }, {});
+  },
+
+  // --- YANGI: Kitchens CRUD ---
+  getKitchens: () => db.prepare('SELECT * FROM kitchens').all(),
+  
+  saveKitchen: (data) => {
+    if (data.id) {
+        // Update
+        return db.prepare('UPDATE kitchens SET name = ?, printer_ip = ?, printer_port = ? WHERE id = ?')
+                 .run(data.name, data.printer_ip, data.printer_port || 9100, data.id);
+    } else {
+        // Insert
+        return db.prepare('INSERT INTO kitchens (name, printer_ip, printer_port) VALUES (?, ?, ?)')
+                 .run(data.name, data.printer_ip, data.printer_port || 9100);
+    }
+  },
+  
+  deleteKitchen: (id) => {
+      // Ehtiyot chorasi: Agar bu oshxonaga bog'langan mahsulotlar bo'lsa, ularni null qilish kerak
+      db.prepare("UPDATE products SET destination = NULL WHERE destination = ?").run(String(id));
+      return db.prepare('DELETE FROM kitchens WHERE id = ?').run(id);
+  },
 
   // Actions
+  saveSettings: (settingsObj) => {
+    const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+    const saveTransaction = db.transaction((settings) => {
+      for (const [key, value] of Object.entries(settings)) stmt.run(key, String(value));
+    });
+    return saveTransaction(settingsObj);
+  },
+
   addHall: (name) => db.prepare('INSERT INTO halls (name) VALUES (?)').run(name),
   deleteHall: (id) => {
     db.prepare('DELETE FROM tables WHERE hall_id = ?').run(id);
@@ -127,13 +135,19 @@ const dbManager = {
   deleteCustomer: (id) => db.prepare('DELETE FROM customers WHERE id = ?').run(id),
   
   addCategory: (name) => db.prepare('INSERT INTO categories (name) VALUES (?)').run(name),
-  addProduct: (p) => db.prepare('INSERT INTO products (category_id, name, price, destination, is_active) VALUES (?, ?, ?, ?, ?)').run(p.category_id, p.name, p.price, p.destination, 1),
+  
+  // YANGILANDI: Product destinationni saqlash
+  addProduct: (p) => db.prepare('INSERT INTO products (category_id, name, price, destination, is_active) VALUES (?, ?, ?, ?, ?)').run(p.category_id, p.name, p.price, String(p.destination), 1),
+  
   toggleProductStatus: (id, status) => db.prepare('UPDATE products SET is_active = ? WHERE id = ?').run(status, id),
   deleteProduct: (id) => db.prepare('DELETE FROM products WHERE id = ?').run(id),
 
   updateTableStatus: (id, status) => db.prepare('UPDATE tables SET status = ? WHERE id = ?').run(status, id),
+  closeTable: (id) => {
+    db.prepare('DELETE FROM order_items WHERE table_id = ?').run(id);
+    return db.prepare(`UPDATE tables SET status = 'free', guests = 0, start_time = NULL, total_amount = 0 WHERE id = ?`).run(id);
+  },
 
-  // Qarz to'lash
   payDebt: (customerId, amount, comment) => {
     const date = new Date().toISOString();
     const updateDebt = db.transaction(() => {
@@ -143,30 +157,18 @@ const dbManager = {
     return updateDebt();
   },
 
-  // --- MUKAMMAL CHECKOUT (TRANZAKSIYA) ---
   checkout: (data) => {
     const { tableId, total, subtotal, discount, paymentMethod, customerId, items } = data;
     const date = new Date().toISOString();
-
-    // Tranzaksiya: Bitta xato bo'lsa, hammasini bekor qiladi
     const performCheckout = db.transaction(() => {
-      // 1. Savdoni arxivga yozish
-      db.prepare(`
-        INSERT INTO sales (date, total_amount, subtotal, discount, payment_method, customer_id, items_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(date, total, subtotal, discount, paymentMethod, customerId, JSON.stringify(items));
-
-      // 2. Agar Nasiya bo'lsa, mijoz qarzini oshirish
+      db.prepare(`INSERT INTO sales (date, total_amount, subtotal, discount, payment_method, customer_id, items_json) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(date, total, subtotal, discount, paymentMethod, customerId, JSON.stringify(items));
       if (paymentMethod === 'debt' && customerId) {
         db.prepare('UPDATE customers SET debt = debt + ? WHERE id = ?').run(total, customerId);
         db.prepare('INSERT INTO debt_history (customer_id, amount, type, date, comment) VALUES (?, ?, ?, ?, ?)').run(customerId, total, 'debt', date, 'Savdo (Nasiya)');
       }
-
-      // 3. Stolni tozalash va bo'shatish
       db.prepare('DELETE FROM order_items WHERE table_id = ?').run(tableId);
       db.prepare("UPDATE tables SET status = 'free', guests = 0, start_time = NULL, total_amount = 0 WHERE id = ?").run(tableId);
     });
-
     return performCheckout();
   }
 };

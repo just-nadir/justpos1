@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Utensils, Flame, Wine, Power, X, Edit3 } from 'lucide-react';
+import { Plus, Trash2, Power, X, ChefHat } from 'lucide-react';
 
-// --- MODAL ---
-const ProductModal = ({ isOpen, onClose, onSubmit, newProduct, setNewProduct, categories }) => {
+const ProductModal = ({ isOpen, onClose, onSubmit, newProduct, setNewProduct, categories, kitchens }) => {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] animate-in fade-in duration-200">
@@ -25,20 +24,22 @@ const ProductModal = ({ isOpen, onClose, onSubmit, newProduct, setNewProduct, ca
               {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
             </select>
           </div>
+          
+          {/* YANGI: OSHXONA TANLASH (DINAMIK) */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Printer (Oshxona)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Qayerda tayyorlanadi?</label>
             <div className="grid grid-cols-3 gap-2">
-              {['kitchen', 'mangal', 'bar'].map((type) => (
-                <button key={type} type="button" onClick={() => setNewProduct({...newProduct, destination: type})}
-                  className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all ${newProduct.destination === type ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
-                  {type === 'kitchen' && <Utensils size={20} />}
-                  {type === 'mangal' && <Flame size={20} />}
-                  {type === 'bar' && <Wine size={20} />}
-                  <span className="text-xs font-bold capitalize">{type}</span>
+              {kitchens.map((k) => (
+                <button key={k.id} type="button" onClick={() => setNewProduct({...newProduct, destination: String(k.id)})}
+                  className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all 
+                    ${newProduct.destination === String(k.id) ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                  <ChefHat size={20} />
+                  <span className="text-xs font-bold capitalize truncate w-full text-center">{k.name}</span>
                 </button>
               ))}
             </div>
           </div>
+
           <button type="submit" className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg hover:bg-blue-700 mt-4">Saqlash</button>
         </form>
       </div>
@@ -46,25 +47,29 @@ const ProductModal = ({ isOpen, onClose, onSubmit, newProduct, setNewProduct, ca
   );
 };
 
-// --- ASOSIY ---
 const MenuManagement = () => {
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
+  const [kitchens, setKitchens] = useState([]); // Yangi state
   const [activeCategory, setActiveCategory] = useState(null);
   
-  // States
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newProduct, setNewProduct] = useState({ name: '', price: '', category_id: '', destination: 'kitchen' });
+  const [newProduct, setNewProduct] = useState({ name: '', price: '', category_id: '', destination: '1' });
 
   const loadData = async () => {
+    if (!window.require) return;
     try {
       const { ipcRenderer } = window.require('electron');
       const cats = await ipcRenderer.invoke('get-categories');
       const prods = await ipcRenderer.invoke('get-products');
+      const kits = await ipcRenderer.invoke('get-kitchens'); // Oshxonalarni yuklash
+      
       setCategories(cats);
       setProducts(prods);
+      setKitchens(kits);
+      
       if (!activeCategory && cats.length > 0) setActiveCategory(cats[0].id);
     } catch (err) { console.error(err); }
   };
@@ -89,11 +94,11 @@ const MenuManagement = () => {
       const { ipcRenderer } = window.require('electron');
       await ipcRenderer.invoke('add-product', { ...newProduct, price: Number(newProduct.price), category_id: Number(newProduct.category_id) || activeCategory });
       setIsModalOpen(false);
-      setNewProduct({ name: '', price: '', category_id: '', destination: 'kitchen' });
+      setNewProduct({ name: '', price: '', category_id: '', destination: '1' }); // Default destination
       loadData();
     } catch (err) { console.error(err); }
   };
-
+  
   const toggleStatus = async (id, status) => {
     const { ipcRenderer } = window.require('electron');
     await ipcRenderer.invoke('toggle-product-status', { id, status: status ? 0 : 1 });
@@ -112,7 +117,7 @@ const MenuManagement = () => {
 
   return (
     <div className="flex w-full h-full">
-      {/* 2-QISM: KATEGORIYALAR (Oq fon, chegaralangan) */}
+      {/* SIDEBAR (Kategoriyalar) */}
       <div className="w-80 bg-white border-r border-gray-200 flex flex-col h-full">
         <div className="p-6 border-b border-gray-100 flex justify-between items-center">
           <h2 className="text-xl font-bold text-gray-800">Kategoriyalar</h2>
@@ -139,9 +144,8 @@ const MenuManagement = () => {
         </div>
       </div>
 
-      {/* 3-QISM: MAHSULOTLAR (Kulrang fon) */}
+      {/* CONTENT (Mahsulotlar) */}
       <div className="flex-1 bg-gray-50 flex flex-col h-full overflow-hidden">
-        {/* Header */}
         <div className="bg-white px-8 py-4 border-b border-gray-200 flex justify-between items-center shadow-sm">
           <h1 className="text-2xl font-bold text-gray-800">Menyu</h1>
           <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold shadow-lg hover:bg-blue-700 flex items-center gap-2">
@@ -149,13 +153,14 @@ const MenuManagement = () => {
           </button>
         </div>
 
-        {/* Grid */}
         <div className="flex-1 overflow-y-auto p-8">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {filteredProducts.map(product => (
               <div key={product.id} className={`bg-white p-4 rounded-2xl shadow-sm border-2 transition-all relative group ${product.is_active ? 'border-transparent hover:border-blue-400' : 'border-gray-200 opacity-60'}`}>
                 <div className="flex justify-between items-start mb-2">
-                  <span className="px-2 py-1 bg-gray-100 rounded-lg text-xs font-bold text-gray-500 uppercase">{product.destination}</span>
+                  <span className="px-2 py-1 bg-gray-100 rounded-lg text-xs font-bold text-gray-500 uppercase">
+                    {product.kitchen_name || 'Aniqlanmagan'} 
+                  </span>
                   <button onClick={() => toggleStatus(product.id, product.is_active)} className={`p-1.5 rounded-full ${product.is_active ? 'text-green-500 bg-green-50' : 'text-gray-400 bg-gray-200'}`}><Power size={16} /></button>
                 </div>
                 <h3 className="font-bold text-gray-800 mb-1 line-clamp-1">{product.name}</h3>
@@ -167,7 +172,7 @@ const MenuManagement = () => {
         </div>
       </div>
 
-      <ProductModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSubmit={handleAddProduct} newProduct={newProduct} setNewProduct={setNewProduct} categories={categories} />
+      <ProductModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSubmit={handleAddProduct} newProduct={newProduct} setNewProduct={setNewProduct} categories={categories} kitchens={kitchens} />
     </div>
   );
 };

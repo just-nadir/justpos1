@@ -1,6 +1,6 @@
 import React from 'react';
-// FileText ni importga qo'shdik
-import { LayoutGrid, UtensilsCrossed, History, Settings, LogOut, Square, Users, FileText } from 'lucide-react';
+// PieChart ni importga qo'shdik
+import { LayoutGrid, UtensilsCrossed, History, Settings, LogOut, Square, Users, FileText, PieChart } from 'lucide-react';
 
 const Sidebar = ({ activePage, onNavigate }) => {
   const menuItems = [
@@ -8,8 +8,8 @@ const Sidebar = ({ activePage, onNavigate }) => {
     { id: 'menu', icon: <UtensilsCrossed size={24} />, label: "Menyu" },
     { id: 'tables', icon: <Square size={24} />, label: "Zallar" },
     { id: 'customers', icon: <Users size={24} />, label: "Mijozlar" },
-    { id: 'debtors', icon: <FileText size={24} />, label: "Qarzdorlar" }, // YANGI
-    { id: 'reports', icon: <PieChart size={24} />, label: "Xisobotlar" },
+    { id: 'debtors', icon: <FileText size={24} />, label: "Qarzdorlar" },
+    { id: 'reports', icon: <PieChart size={24} />, label: "Xisobotlar" }, // Bu yerda PieChart ishlatilgan
     { id: 'settings', icon: <Settings size={24} />, label: "Sozlamalar" },
   ];
 

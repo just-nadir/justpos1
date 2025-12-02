@@ -11,6 +11,24 @@ const OrderSummary = ({ table, onDeselect }) => {
   const [orderItems, setOrderItems] = useState([]);
   const [loading, setLoading] = useState(false);
   
+  // Sozlamalar state
+  const [settings, setSettings] = useState({});
+
+  // Sozlamalarni yuklash
+  useEffect(() => {
+    const loadSettings = async () => {
+      // Agar brauzerda bo'lsa, ishlamasin (xatolik oldini olish)
+      if (!window.require) return;
+
+      try {
+        const { ipcRenderer } = window.require('electron');
+        const data = await ipcRenderer.invoke('get-settings');
+        setSettings(data);
+      } catch (err) { console.error(err); }
+    };
+    loadSettings();
+  }, []);
+
   useEffect(() => {
     setSelectedCustomer(null);
     setBonusToUse(0);
@@ -21,6 +39,8 @@ const OrderSummary = ({ table, onDeselect }) => {
   }, [table]);
 
   const loadOrderItems = async (tableId) => {
+    if (!window.require) return;
+    
     setLoading(true);
     try {
       const { ipcRenderer } = window.require('electron');
@@ -34,7 +54,7 @@ const OrderSummary = ({ table, onDeselect }) => {
   };
 
   const handlePrintCheck = async () => {
-    if (!table) return;
+    if (!table || !window.require) return;
     try {
       const { ipcRenderer } = window.require('electron');
       await ipcRenderer.invoke('update-table-status', { id: table.id, status: 'payment' });
@@ -44,7 +64,19 @@ const OrderSummary = ({ table, onDeselect }) => {
   // --- HISOBLASH ---
   const subtotal = orderItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const guestsCount = table?.guests || 0;
-  const service = guestsCount * 1000;
+
+  // Xizmat haqini dinamik hisoblash
+  let service = 0;
+  const svcValue = Number(settings.serviceChargeValue) || 0;
+  
+  if (settings.serviceChargeType === 'percent') {
+      // Agar foiz bo'lsa
+      service = (subtotal * svcValue) / 100;
+  } else {
+      // Agar kishi boshiga bo'lsa (fixed)
+      service = guestsCount * svcValue;
+  }
+
   const preTotal = subtotal + service;
 
   let discountAmount = 0;
@@ -58,40 +90,53 @@ const OrderSummary = ({ table, onDeselect }) => {
   const finalTotal = preTotal - discountAmount;
 
   // --- TO'LOV QILISH ---
-  // --- YANGILANDI: CHECKOUT ---
   const handlePaymentSuccess = async (method) => {
-    if (!table) return;
+    if (!table || !window.require) return;
     try {
       const { ipcRenderer } = window.require('electron');
       
-      // Ma'lumotlarni yig'amiz
-      const paymentData = {
-        total: finalTotal,
-        subtotal,
-        service,
-        discount: discountAmount,
-        paymentMethod: method,
-        customerId: selectedCustomer ? selectedCustomer.id : null,
-        tableName: table.name,
-        items: orderItems // Buni backendda json qilib saqlaymiz
+      // Checkout uchun ma'lumotlarni yig'amiz
+      const checkoutData = {
+          tableId: table.id,
+          total: finalTotal,
+          subtotal: subtotal,
+          discount: discountAmount,
+          paymentMethod: method,
+          customerId: selectedCustomer ? selectedCustomer.id : null,
+          items: orderItems
       };
 
-      // Backendga to'liq checkout buyrug'ini beramiz
-      await ipcRenderer.invoke('checkout', { 
-         tableId: table.id, 
-         paymentData 
-      });
+      // Backenddagi 'checkout' funksiyasini chaqiramiz
+      await ipcRenderer.invoke('checkout', checkoutData);
       
       setIsPaymentModalOpen(false);
       if (onDeselect) onDeselect();
 
-    } catch (error) { console.error(error); }
+    } catch (error) {
+      console.error(error);
+    }
   };
   
+  // INPUT FIX: Qiymatni to'g'ri boshqarish
   const handleBonusChange = (e) => {
-    let val = Number(e.target.value);
+    const valueStr = e.target.value;
+    
+    // Bo'sh bo'lsa 0
+    if (valueStr === '') {
+        setBonusToUse(0);
+        return;
+    }
+
+    // Manfiy sonlarni bloklash
+    let val = Number(valueStr);
+    if (val < 0) return;
+
+    // Maksimal balansdan oshmasligi kerak
     if (val > selectedCustomer.balance) val = selectedCustomer.balance;
+    
+    // Jami summadan oshmasligi kerak
     if (val > preTotal) val = preTotal;
+
     setBonusToUse(val);
   };
 
@@ -147,7 +192,13 @@ const OrderSummary = ({ table, onDeselect }) => {
                  </div>
                  <div className="flex items-center gap-2">
                     <Wallet size={16} className="text-green-500" />
-                    <input type="number" value={bonusToUse === 0 ? '' : bonusToUse} onChange={handleBonusChange} placeholder="Summa" className="w-full outline-none text-sm font-bold text-gray-800"/>
+                    <input 
+                        type="number" 
+                        value={bonusToUse === 0 ? '' : bonusToUse} 
+                        onChange={handleBonusChange} 
+                        placeholder="Summa" 
+                        className="w-full outline-none text-sm font-bold text-gray-800 bg-transparent"
+                    />
                  </div>
                </div>
              )}
@@ -172,7 +223,13 @@ const OrderSummary = ({ table, onDeselect }) => {
         {/* TOTALS */}
         <div className="p-4 bg-gray-50 border-t border-gray-200 space-y-2">
           <div className="flex justify-between text-gray-600"><span>Stol hisobi:</span><span>{subtotal.toLocaleString()}</span></div>
-          <div className="flex justify-between text-gray-600"><span>Xizmat:</span><span>{service.toLocaleString()}</span></div>
+          
+          {/* Service Charge dinamik ko'rsatish */}
+          <div className="flex justify-between text-gray-600">
+             <span>Xizmat ({settings.serviceChargeType === 'percent' ? `${settings.serviceChargeValue}%` : 'Fixed'}):</span>
+             <span>{service.toLocaleString()}</span>
+          </div>
+
           {discountAmount > 0 && (
             <div className="flex justify-between text-orange-600 font-medium"><span>Chegirma:</span><span>- {discountAmount.toLocaleString()}</span></div>
           )}
@@ -207,4 +264,4 @@ const OrderSummary = ({ table, onDeselect }) => {
   );
 };
 
-export default OrderSummary;
+export default OrderSummary;d

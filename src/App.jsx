@@ -7,6 +7,7 @@ import TablesManagement from './components/TablesManagement';
 import CustomersManagement from './components/CustomersManagement';
 import DebtorsManagement from './components/DebtorsManagement'; // Import
 import Reports from './components/Reports';
+import Settings from './components/Settings';
 
 function App() {
   const [activePage, setActivePage] = useState('pos');
@@ -26,6 +27,7 @@ function App() {
       case 'customers': return <CustomersManagement />;
       case 'debtors': return <DebtorsManagement />; // YANGI
       case 'reports': return <Reports />;
+      case 'settings': return <Settings />;
       default: return <div>Sahifa topilmadi</div>;
     }
   };
