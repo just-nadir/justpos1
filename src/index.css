@@ -8,3 +8,12 @@ body {
   box-sizing: border-box;
   background-color: #f3f4f6; /* Och kulrang fon */
 }
+
+/* --- INPUTLAR UCHUN MUHIM FIX --- */
+/* Bu kod inputlarga yozish va belgilash imkonini qaytaradi */
+input, textarea {
+  -webkit-user-select: text !important; /* Chrome/Electron uchun */
+  user-select: text !important;
+  cursor: text !important;
+  pointer-events: auto !important;
+}

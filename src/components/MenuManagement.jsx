@@ -5,7 +5,7 @@ import { Plus, Trash2, Utensils, Flame, Wine, Power, X, Edit3 } from 'lucide-rea
 const ProductModal = ({ isOpen, onClose, onSubmit, newProduct, setNewProduct, categories }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] animate-in fade-in duration-200">
       <div className="bg-white w-[500px] rounded-2xl shadow-2xl p-6 relative">
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={24} /></button>
         <h2 className="text-xl font-bold text-gray-800 mb-6">Yangi Taom</h2>

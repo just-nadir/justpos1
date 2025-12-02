@@ -4,7 +4,9 @@ import TablesGrid from './components/TablesGrid';
 import OrderSummary from './components/OrderSummary';
 import MenuManagement from './components/MenuManagement';
 import TablesManagement from './components/TablesManagement';
-import CustomersManagement from './components/CustomersManagement'; // YANGI
+import CustomersManagement from './components/CustomersManagement';
+import DebtorsManagement from './components/DebtorsManagement'; // Import
+import Reports from './components/Reports';
 
 function App() {
   const [activePage, setActivePage] = useState('pos');
@@ -21,7 +23,8 @@ function App() {
         );
       case 'menu': return <MenuManagement />;
       case 'tables': return <TablesManagement />;
-      case 'customers': return <CustomersManagement />; // YANGI
+      case 'customers': return <CustomersManagement />;
+      case 'debtors': return <DebtorsManagement />; // YANGI
       case 'history': return <div className="flex-1 p-10 text-center text-gray-500 font-bold">Tarix sahifasi (Tez orada)</div>;
       default: return <div>Sahifa topilmadi</div>;
     }
