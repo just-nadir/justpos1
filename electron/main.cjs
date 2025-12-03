@@ -1,11 +1,18 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const dbManager = require('./db.cjs');
+// Serverni import qilamiz
+const startServer = require('./server.cjs');
 
 app.disableHardwareAcceleration();
 
 function createWindow() {
+  // 1. Bazani initsializatsiya qilamiz
   dbManager.init();
+  
+  // 2. Mobil serverni ishga tushiramiz
+  startServer();
+
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -15,7 +22,8 @@ function createWindow() {
       contextIsolation: false,
     },
   });
-
+  
+  // Dev mode yoki build
   win.loadURL('http://localhost:5173');
 }
 
@@ -31,7 +39,6 @@ ipcMain.handle('add-table', (e, data) => dbManager.addTable(data.hallId, data.na
 ipcMain.handle('delete-table', (e, id) => dbManager.deleteTable(id));
 ipcMain.handle('update-table-status', (e, data) => dbManager.updateTableStatus(data.id, data.status));
 ipcMain.handle('close-table', (e, id) => dbManager.closeTable(id));
-
 // Mijozlar & Qarzlar
 ipcMain.handle('get-customers', () => dbManager.getCustomers());
 ipcMain.handle('add-customer', (e, c) => dbManager.addCustomer(c));
@@ -48,7 +55,6 @@ ipcMain.handle('get-products', () => dbManager.getProducts());
 ipcMain.handle('add-product', (e, p) => dbManager.addProduct(p));
 ipcMain.handle('toggle-product-status', (e, data) => dbManager.toggleProductStatus(data.id, data.status));
 ipcMain.handle('delete-product', (e, id) => dbManager.deleteProduct(id));
-
 // Sozlamalar & Oshxonalar (MUHIM)
 ipcMain.handle('get-settings', () => dbManager.getSettings());
 ipcMain.handle('save-settings', (e, data) => dbManager.saveSettings(data));
