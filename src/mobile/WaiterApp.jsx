@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { io } from 'socket.io-client';
 import { Users, Clock, ChevronLeft, ShoppingBag, Trash2, Plus, Minus, CheckCircle, X } from 'lucide-react';
 
 const API_URL = window.location.protocol + '//' + window.location.hostname + ':3000/api';
+const SOCKET_URL = window.location.protocol + '//' + window.location.hostname + ':3000';
 
 const WaiterApp = () => {
-  const [view, setView] = useState('tables'); // 'tables', 'menu', 'cart'
+  const [view, setView] = useState('tables'); 
   const [tables, setTables] = useState([]);
   const [activeTable, setActiveTable] = useState(null);
   
@@ -25,66 +27,38 @@ const WaiterApp = () => {
   // Cart
   const [cart, setCart] = useState([]); 
 
-  // --- INITIAL DATA ---
-  const loadData = async () => {
-    try {
-      const [tRes, sRes] = await Promise.all([
-        axios.get(`${API_URL}/tables`),
-        axios.get(`${API_URL}/settings`)
-      ]);
-      setTables(tRes.data);
-      if (sRes.data.serviceChargeType) {
-        setServiceType(sRes.data.serviceChargeType);
-      }
-    } catch (err) { console.error(err); }
+  // --- INITIAL DATA & SOCKET ---
+  const loadTables = async () => {
+      try {
+          const res = await axios.get(`${API_URL}/tables`);
+          setTables(res.data);
+      } catch (err) { console.error(err); }
   };
+
+  const loadSettings = async () => {
+      try {
+          const sRes = await axios.get(`${API_URL}/settings`);
+          if (sRes.data.serviceChargeType) setServiceType(sRes.data.serviceChargeType);
+      } catch (err) { console.error(err); }
+  }
 
   useEffect(() => {
-    loadData();
-    const interval = setInterval(() => {
-        if (view === 'tables' && !showGuestModal) {
-            axios.get(`${API_URL}/tables`).then(res => setTables(res.data));
+    loadTables();
+    loadSettings();
+
+    const socket = io(SOCKET_URL);
+    socket.on('update', (data) => {
+        if (data.type === 'tables') {
+            loadTables(); 
         }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [view, showGuestModal]);
+    });
 
-  // --- LOGIC ---
+    return () => socket.disconnect();
+  }, []);
 
-  const handleTableClick = (table) => {
-    // Agar stol band bo'lsa, uning o'z mehmonlar sonini olamiz
-    // Agar bo'sh bo'lsa, default 2 ni taklif qilamiz
-    if (table.status === 'free') {
-        setActiveTable(table);
-        setGuestCount(2); 
-        setShowGuestModal(true);
-    } else {
-        setActiveTable(table);
-        openMenu(table);
-    }
-  };
-
-  // O'ZGARISH #1: Mehmonlar sonini tasdiqlaganda SERVERGA YUBORMAYMIZ
-  const confirmGuestCount = () => {
-    if (!activeTable) return;
-    
-    // Biz faqat lokal (telefondagi) holatni yangilaymiz.
-    // Baza hali ham "bo'sh" deb o'ylaydi.
-    const updatedTable = { ...activeTable, guests: guestCount };
-    
-    setActiveTable(updatedTable);
-    openMenu(updatedTable);
-    setShowGuestModal(false);
-  };
-
-  const openMenu = async (table) => {
-    setCart([]);
-    setView('menu');
-    
-    // Menyuni yuklash
+  const loadMenu = async () => {
     setLoading(true);
     try {
-      // Agar oldin yuklanmagan bo'lsa yuklaymiz (optimallashtirish)
       if (categories.length === 0) {
           const [catRes, prodRes] = await Promise.all([
             axios.get(`${API_URL}/categories`),
@@ -98,7 +72,33 @@ const WaiterApp = () => {
     finally { setLoading(false); }
   };
 
-  // Savatcha
+  // --- LOGIC ---
+
+  const handleTableClick = (table) => {
+    if (table.status === 'free') {
+        setActiveTable(table);
+        setGuestCount(2); 
+        setShowGuestModal(true);
+    } else {
+        setActiveTable(table);
+        openMenu(table);
+    }
+  };
+
+  const confirmGuestCount = () => {
+    if (!activeTable) return;
+    const updatedTable = { ...activeTable, guests: guestCount };
+    setActiveTable(updatedTable);
+    openMenu(updatedTable);
+    setShowGuestModal(false);
+  };
+
+  const openMenu = async (table) => {
+    setCart([]);
+    setView('menu');
+    loadMenu();
+  };
+
   const addToCart = (product) => {
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
@@ -111,36 +111,28 @@ const WaiterApp = () => {
     setCart(prev => prev.map(item => item.id === productId ? { ...item, qty: Math.max(0, item.qty - 1) } : item).filter(item => item.qty > 0));
   };
 
-  // O'ZGARISH #2: Buyurtma berishda STOLNI BAND QILAMIZ
+  // --- YANGI: BULK SEND ---
   const sendOrder = async () => {
     if (!activeTable || cart.length === 0) return;
-    
     if(!window.confirm(`Jami ${cartTotal.toLocaleString()} so'm. Yuboraymi?`)) return;
 
     try {
-      // 1. Avval stolni band qilamiz va mehmonlar sonini yozamiz
-      // (Agar stol allaqachon band bo'lsa, bu shunchaki sonni yangilaydi, zarar qilmaydi)
+      // 1. Mehmonlar soni (agar o'zgargan bo'lsa)
       await axios.post(`${API_URL}/tables/guests`, {
           tableId: activeTable.id,
           count: activeTable.guests 
       });
 
-      // 2. Keyin buyurtmalarni jo'natamiz
-      for (const item of cart) {
-        await axios.post(`${API_URL}/orders/add`, {
+      // 2. BULK REQUEST (Bitta so'rov bilan hammasini yuboramiz)
+      await axios.post(`${API_URL}/orders/bulk-add`, {
           tableId: activeTable.id,
-          productId: item.id,
-          productName: item.name,
-          price: item.price,
-          quantity: item.qty,
-          destination: item.destination
-        });
-      }
+          items: cart
+      });
       
       alert("Buyurtma qabul qilindi! ✅");
       setCart([]);
       setView('tables');
-      loadData();
+      // loadData() shart emas, socket hal qiladi
     } catch (err) {
       console.error(err);
       alert("Xatolik: Internetni tekshiring");
@@ -150,7 +142,6 @@ const WaiterApp = () => {
   const handleBack = () => {
       setActiveTable(null);
       setView('tables');
-      loadData();
   };
 
   const updateGuestsInMenu = () => {
@@ -205,7 +196,10 @@ const WaiterApp = () => {
             <h1 className="text-xl font-bold">Ofitsiant</h1>
             <p className="text-xs text-blue-200 flex items-center gap-1">{serviceType === 'fixed' ? '📌 Fixed Service' : 'Percent Service'}</p>
           </div>
-          <button onClick={loadData} className="p-2 bg-blue-500 rounded-full active:scale-95"><Clock size={20}/></button>
+          <div className="flex gap-2">
+             <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse self-center"></div>
+             <span className="text-xs text-green-100 self-center">Live</span>
+          </div>
         </div>
 
         <div className="p-3 grid grid-cols-2 gap-3">

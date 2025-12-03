@@ -1,7 +1,15 @@
 const express = require('express');
 const cors = require('cors');
-const dbManager = require('./db.cjs');
+const http = require('http');
+const { Server } = require("socket.io");
+const { onChange } = require('./database.cjs'); // Signal
 const ip = require('ip');
+
+// Controllerlar
+const tableController = require('./controllers/tableController.cjs');
+const productController = require('./controllers/productController.cjs');
+const orderController = require('./controllers/orderController.cjs');
+const settingsController = require('./controllers/settingsController.cjs');
 
 function startServer() {
   const app = express();
@@ -10,48 +18,51 @@ function startServer() {
   app.use(cors());
   app.use(express.json());
 
-  // 1. Zallar va Stollar
+  const httpServer = http.createServer(app);
+  
+  const io = new Server(httpServer, {
+    cors: { origin: "*", methods: ["GET", "POST"] }
+  });
+
+  // Signalni tarqatish
+  onChange((type, id) => {
+    console.log(`📡 Update: ${type} ${id || ''}`);
+    io.emit('update', { type, id });
+  });
+
+  io.on('connection', (socket) => {
+    console.log('📱 Yangi qurilma ulandi:', socket.id);
+    socket.on('disconnect', () => console.log('❌ Qurilma uzildi:', socket.id));
+  });
+
+  // --- API ---
+
   app.get('/api/halls', (req, res) => {
-    try {
-      const halls = dbManager.getHalls();
-      res.json(halls);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    try { res.json(tableController.getHalls()); } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
   app.get('/api/tables', (req, res) => {
-    try {
-      const tables = dbManager.getTables();
-      res.json(tables);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    try { res.json(tableController.getTables()); } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  // 2. Menyu
   app.get('/api/categories', (req, res) => {
-    try {
-      const categories = dbManager.getCategories();
-      res.json(categories);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    try { res.json(productController.getCategories()); } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
   app.get('/api/products', (req, res) => {
     try {
-      const products = dbManager.getProducts().filter(p => p.is_active === 1);
+      const products = productController.getProducts().filter(p => p.is_active === 1);
       res.json(products);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  // 3. Stol buyurtmalari
   app.get('/api/tables/:id/items', (req, res) => {
-    try {
-      const items = dbManager.getTableItems(req.params.id);
-      res.json(items);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    try { res.json(orderController.getTableItems(req.params.id)); } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  // 4. BUYURTMA QO'SHISH
   app.post('/api/orders/add', (req, res) => {
     try {
-      dbManager.addItem(req.body);
+      orderController.addItem(req.body);
       res.json({ success: true });
     } catch (e) {
       console.error(e);
@@ -59,29 +70,37 @@ function startServer() {
     }
   });
 
-  // --- YANGI ENDPOINTLAR ---
-
-  // 5. SOZLAMALARNI OLISH (Fixed yoki Percent ekanligini bilish uchun)
-  app.get('/api/settings', (req, res) => {
+  app.post('/api/orders/bulk-add', (req, res) => {
     try {
-      const settings = dbManager.getSettings();
-      res.json(settings);
-    } catch(e) { res.status(500).json({ error: e.message }); }
+      const { tableId, items } = req.body;
+      if (!tableId || !items || !Array.isArray(items)) throw new Error("Noto'g'ri ma'lumot");
+      orderController.addBulkItems(tableId, items);
+      res.json({ success: true });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: e.message });
+    }
   });
 
-  // 6. MEHMONLAR SONINI YANGILASH
+  app.get('/api/settings', (req, res) => {
+    try { res.json(settingsController.getSettings()); } catch(e) { res.status(500).json({ error: e.message }); }
+  });
+
   app.post('/api/tables/guests', (req, res) => {
     try {
       const { tableId, count } = req.body;
-      dbManager.updateTableGuests(tableId, count);
+      tableController.updateTableGuests(tableId, count);
       res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+      console.error(e);
+      res.status(500).json({ error: e.message }); 
+    }
   });
 
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     const localIp = ip.address();
     console.log(`============================================`);
-    console.log(`📡 MOBIL SERVER ISHLADI: http://${localIp}:${PORT}`);
+    console.log(`📡 REAL-TIME SERVER: http://${localIp}:${PORT}`);
     console.log(`============================================`);
   });
 }

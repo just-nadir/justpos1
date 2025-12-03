@@ -1,16 +1,19 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
-const dbManager = require('./db.cjs');
-// Serverni import qilamiz
-const startServer = require('./server.cjs');
+const { initDB } = require('./database.cjs'); // Baza
+const startServer = require('./server.cjs');  // Server
+
+// Controllerlarni import qilamiz
+const tableController = require('./controllers/tableController.cjs');
+const productController = require('./controllers/productController.cjs');
+const orderController = require('./controllers/orderController.cjs');
+const userController = require('./controllers/userController.cjs');
+const settingsController = require('./controllers/settingsController.cjs');
 
 app.disableHardwareAcceleration();
 
 function createWindow() {
-  // 1. Bazani initsializatsiya qilamiz
-  dbManager.init();
-  
-  // 2. Mobil serverni ishga tushiramiz
+  initDB();
   startServer();
 
   const win = new BrowserWindow({
@@ -23,53 +26,53 @@ function createWindow() {
     },
   });
   
-  // Dev mode yoki build
   win.loadURL('http://localhost:5173');
 }
 
 // --- IPC HANDLERS ---
 
 // Zallar & Stollar
-ipcMain.handle('get-halls', () => dbManager.getHalls());
-ipcMain.handle('add-hall', (e, name) => dbManager.addHall(name));
-ipcMain.handle('delete-hall', (e, id) => dbManager.deleteHall(id));
-ipcMain.handle('get-tables', () => dbManager.getTables());
-ipcMain.handle('get-tables-by-hall', (e, id) => dbManager.getTablesByHall(id));
-ipcMain.handle('add-table', (e, data) => dbManager.addTable(data.hallId, data.name));
-ipcMain.handle('delete-table', (e, id) => dbManager.deleteTable(id));
-ipcMain.handle('update-table-status', (e, data) => dbManager.updateTableStatus(data.id, data.status));
-ipcMain.handle('close-table', (e, id) => dbManager.closeTable(id));
+ipcMain.handle('get-halls', () => tableController.getHalls());
+ipcMain.handle('add-hall', (e, name) => tableController.addHall(name));
+ipcMain.handle('delete-hall', (e, id) => tableController.deleteHall(id));
+ipcMain.handle('get-tables', () => tableController.getTables());
+ipcMain.handle('get-tables-by-hall', (e, id) => tableController.getTablesByHall(id));
+ipcMain.handle('add-table', (e, data) => tableController.addTable(data.hallId, data.name));
+ipcMain.handle('delete-table', (e, id) => tableController.deleteTable(id));
+ipcMain.handle('update-table-status', (e, data) => tableController.updateTableStatus(data.id, data.status));
+ipcMain.handle('close-table', (e, id) => tableController.closeTable(id));
+
 // Mijozlar & Qarzlar
-ipcMain.handle('get-customers', () => dbManager.getCustomers());
-ipcMain.handle('add-customer', (e, c) => dbManager.addCustomer(c));
-ipcMain.handle('delete-customer', (e, id) => dbManager.deleteCustomer(id));
-ipcMain.handle('get-debtors', () => dbManager.getDebtors());
-ipcMain.handle('get-debt-history', (e, id) => dbManager.getDebtHistory(id));
-ipcMain.handle('add-debt', (e, data) => dbManager.addDebt(data.customerId, data.amount, data.comment));
-ipcMain.handle('pay-debt', (e, data) => dbManager.payDebt(data.customerId, data.amount, data.comment));
+ipcMain.handle('get-customers', () => userController.getCustomers());
+ipcMain.handle('add-customer', (e, c) => userController.addCustomer(c));
+ipcMain.handle('delete-customer', (e, id) => userController.deleteCustomer(id));
+ipcMain.handle('get-debtors', () => userController.getDebtors());
+ipcMain.handle('get-debt-history', (e, id) => userController.getDebtHistory(id));
+ipcMain.handle('pay-debt', (e, data) => userController.payDebt(data.customerId, data.amount, data.comment));
 
 // Menyu & Mahsulotlar
-ipcMain.handle('get-categories', () => dbManager.getCategories());
-ipcMain.handle('add-category', (e, name) => dbManager.addCategory(name));
-ipcMain.handle('get-products', () => dbManager.getProducts());
-ipcMain.handle('add-product', (e, p) => dbManager.addProduct(p));
-ipcMain.handle('toggle-product-status', (e, data) => dbManager.toggleProductStatus(data.id, data.status));
-ipcMain.handle('delete-product', (e, id) => dbManager.deleteProduct(id));
-// Sozlamalar & Oshxonalar (MUHIM)
-ipcMain.handle('get-settings', () => dbManager.getSettings());
-ipcMain.handle('save-settings', (e, data) => dbManager.saveSettings(data));
-ipcMain.handle('get-kitchens', () => dbManager.getKitchens());
-ipcMain.handle('save-kitchen', (e, data) => dbManager.saveKitchen(data));
-ipcMain.handle('delete-kitchen', (e, id) => dbManager.deleteKitchen(id));
+ipcMain.handle('get-categories', () => productController.getCategories());
+ipcMain.handle('add-category', (e, name) => productController.addCategory(name));
+ipcMain.handle('get-products', () => productController.getProducts());
+ipcMain.handle('add-product', (e, p) => productController.addProduct(p));
+ipcMain.handle('toggle-product-status', (e, data) => productController.toggleProductStatus(data.id, data.status));
+ipcMain.handle('delete-product', (e, id) => productController.deleteProduct(id));
+
+// Sozlamalar
+ipcMain.handle('get-settings', () => settingsController.getSettings());
+ipcMain.handle('save-settings', (e, data) => settingsController.saveSettings(data));
+ipcMain.handle('get-kitchens', () => settingsController.getKitchens());
+ipcMain.handle('save-kitchen', (e, data) => settingsController.saveKitchen(data));
+ipcMain.handle('delete-kitchen', (e, id) => settingsController.deleteKitchen(id));
 
 // Kassa & Xisobot
-ipcMain.handle('get-table-items', (e, id) => dbManager.getTableItems(id));
-ipcMain.handle('checkout', (e, data) => dbManager.checkout(data));
+ipcMain.handle('get-table-items', (e, id) => orderController.getTableItems(id));
+ipcMain.handle('checkout', (e, data) => orderController.checkout(data));
 ipcMain.handle('get-sales', (e, range) => {
   if (range && range.startDate && range.endDate) {
-      return dbManager.getSales(range.startDate, range.endDate);
+      return orderController.getSales(range.startDate, range.endDate);
   }
-  return dbManager.getSales();
+  return orderController.getSales();
 });
 
 app.whenReady().then(() => {
