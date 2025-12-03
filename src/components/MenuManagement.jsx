@@ -11,32 +11,33 @@ const ProductModal = ({ isOpen, onClose, onSubmit, newProduct, setNewProduct, ca
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nomi</label>
-            <input required type="text" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-blue-500" placeholder="Masalan: Qozon Kabob" autoFocus />
+            <input required type="text" value={newProduct.name || ''} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-blue-500" placeholder="Masalan: Qozon Kabob" autoFocus />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Narxi</label>
-            <input required type="number" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-blue-500" placeholder="0" />
+            <input required type="number" value={newProduct.price || ''} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-blue-500" placeholder="0" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Kategoriya</label>
-            <select value={newProduct.category_id} onChange={e => setNewProduct({...newProduct, category_id: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-blue-500">
+            <select value={newProduct.category_id || ''} onChange={e => setNewProduct({...newProduct, category_id: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-blue-500">
               <option value="">Tanlang</option>
               {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
             </select>
           </div>
           
-          {/* YANGI: OSHXONA TANLASH (DINAMIK) */}
+          {/* OSHXONA TANLASH */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Qayerda tayyorlanadi?</label>
             <div className="grid grid-cols-3 gap-2">
-              {kitchens.map((k) => (
+              {/* Oshxonalar bo'sh bo'lsa xato bermasligi uchun tekshiruv */}
+              {kitchens && kitchens.length > 0 ? kitchens.map((k) => (
                 <button key={k.id} type="button" onClick={() => setNewProduct({...newProduct, destination: String(k.id)})}
                   className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all 
                     ${newProduct.destination === String(k.id) ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
                   <ChefHat size={20} />
                   <span className="text-xs font-bold capitalize truncate w-full text-center">{k.name}</span>
                 </button>
-              ))}
+              )) : <p className="text-xs text-gray-400 col-span-3 text-center">Oshxonalar mavjud emas. Sozlamalardan qo'shing.</p>}
             </div>
           </div>
 
@@ -50,12 +51,13 @@ const ProductModal = ({ isOpen, onClose, onSubmit, newProduct, setNewProduct, ca
 const MenuManagement = () => {
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
-  const [kitchens, setKitchens] = useState([]); // Yangi state
+  const [kitchens, setKitchens] = useState([]);
   const [activeCategory, setActiveCategory] = useState(null);
   
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  // Default qiymatlar inputlar qotib qolmasligi uchun muhim
   const [newProduct, setNewProduct] = useState({ name: '', price: '', category_id: '', destination: '1' });
 
   const loadData = async () => {
@@ -64,13 +66,13 @@ const MenuManagement = () => {
       const { ipcRenderer } = window.require('electron');
       const cats = await ipcRenderer.invoke('get-categories');
       const prods = await ipcRenderer.invoke('get-products');
-      const kits = await ipcRenderer.invoke('get-kitchens'); // Oshxonalarni yuklash
+      const kits = await ipcRenderer.invoke('get-kitchens');
       
-      setCategories(cats);
-      setProducts(prods);
-      setKitchens(kits);
+      setCategories(cats || []);
+      setProducts(prods || []);
+      setKitchens(kits || []);
       
-      if (!activeCategory && cats.length > 0) setActiveCategory(cats[0].id);
+      if (!activeCategory && cats && cats.length > 0) setActiveCategory(cats[0].id);
     } catch (err) { console.error(err); }
   };
 
@@ -94,7 +96,8 @@ const MenuManagement = () => {
       const { ipcRenderer } = window.require('electron');
       await ipcRenderer.invoke('add-product', { ...newProduct, price: Number(newProduct.price), category_id: Number(newProduct.category_id) || activeCategory });
       setIsModalOpen(false);
-      setNewProduct({ name: '', price: '', category_id: '', destination: '1' }); // Default destination
+      // Reset qilish
+      setNewProduct({ name: '', price: '', category_id: '', destination: '1' });
       loadData();
     } catch (err) { console.error(err); }
   };
@@ -158,7 +161,7 @@ const MenuManagement = () => {
             {filteredProducts.map(product => (
               <div key={product.id} className={`bg-white p-4 rounded-2xl shadow-sm border-2 transition-all relative group ${product.is_active ? 'border-transparent hover:border-blue-400' : 'border-gray-200 opacity-60'}`}>
                 <div className="flex justify-between items-start mb-2">
-                  <span className="px-2 py-1 bg-gray-100 rounded-lg text-xs font-bold text-gray-500 uppercase">
+                  <span className="px-2 py-1 bg-gray-100 rounded-lg text-xs font-bold text-gray-500 uppercase truncate max-w-[100px]">
                     {product.kitchen_name || 'Aniqlanmagan'} 
                   </span>
                   <button onClick={() => toggleStatus(product.id, product.is_active)} className={`p-1.5 rounded-full ${product.is_active ? 'text-green-500 bg-green-50' : 'text-gray-400 bg-gray-200'}`}><Power size={16} /></button>

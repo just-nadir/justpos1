@@ -264,4 +264,4 @@ const OrderSummary = ({ table, onDeselect }) => {
   );
 };
 
-export default OrderSummary;d
+export default OrderSummary;

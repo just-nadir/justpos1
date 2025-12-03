@@ -6,12 +6,14 @@ const Settings = () => {
   const [loading, setLoading] = useState(false);
   const [kitchens, setKitchens] = useState([]);
   
-  // Yangi oshxona qo'shish uchun state
   const [newKitchen, setNewKitchen] = useState({ name: '', printer_ip: '192.168.1.', printer_port: 9100 });
 
   const [settings, setSettings] = useState({
     restaurantName: "", address: "", phone: "", wifiPassword: "",
-    serviceChargeType: "percent", serviceChargeValue: 0, receiptFooter: "", printerReceipt: ""
+    serviceChargeType: "percent", serviceChargeValue: 0, receiptFooter: "", 
+    // YANGI: Kassa printeri uchun IP va Port
+    printerReceiptIP: "", 
+    printerReceiptPort: 9100
   });
 
   useEffect(() => {
@@ -23,7 +25,13 @@ const Settings = () => {
      try {
         const { ipcRenderer } = window.require('electron');
         const sData = await ipcRenderer.invoke('get-settings');
-        setSettings(prev => ({...prev, ...sData, serviceChargeValue: Number(sData.serviceChargeValue) || 0}));
+        setSettings(prev => ({
+            ...prev, 
+            ...sData, 
+            serviceChargeValue: Number(sData.serviceChargeValue) || 0,
+            // Portni raqamga o'tkazamiz
+            printerReceiptPort: Number(sData.printerReceiptPort) || 9100 
+        }));
         
         const kData = await ipcRenderer.invoke('get-kitchens');
         setKitchens(kData);
@@ -52,8 +60,8 @@ const Settings = () => {
     try {
        const { ipcRenderer } = window.require('electron');
        await ipcRenderer.invoke('save-kitchen', newKitchen);
-       setNewKitchen({ name: '', printer_ip: '192.168.1.', printer_port: 9100 }); // Reset
-       loadAllData(); // Refresh
+       setNewKitchen({ name: '', printer_ip: '192.168.1.', printer_port: 9100 }); 
+       loadAllData(); 
     } catch (err) { console.error(err); }
   };
 
@@ -173,15 +181,36 @@ const Settings = () => {
           </div>
         )}
 
-        {/* PRINTERS (Receipt) */}
+        {/* PRINTERS (Receipt) - YANGILANDI */}
         {activeTab === 'printers' && (
           <div className="max-w-2xl space-y-6">
              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                 <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Printer size={20} className="text-purple-500"/> Kassa Printeri</h3>
-                <p className="text-sm text-gray-400 mb-6">Mijozga beriladigan chek uchun.</p>
+                <p className="text-sm text-gray-400 mb-6">Mijozga beriladigan chek uchun asosiy printer (LAN).</p>
+                
                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
-                    <div><p className="font-bold text-gray-700">Asosiy Printer</p></div>
-                    <input type="text" name="printerReceipt" value={settings.printerReceipt || ''} onChange={handleChange} className="p-2 rounded-lg border border-gray-300 outline-none text-sm w-48" placeholder="Printer nomi (USB)..." />
+                    <div>
+                        <p className="font-bold text-gray-700">Printer IP Manzili</p>
+                        <p className="text-xs text-gray-400">Masalan: 192.168.1.100</p>
+                    </div>
+                    <div className="flex gap-2">
+                        <input 
+                            type="text" 
+                            name="printerReceiptIP" 
+                            value={settings.printerReceiptIP || ''} 
+                            onChange={handleChange} 
+                            className="p-2 rounded-lg border border-gray-300 outline-none text-sm w-32 font-mono text-center" 
+                            placeholder="192.168.1.100" 
+                        />
+                        <input 
+                            type="number" 
+                            name="printerReceiptPort" 
+                            value={settings.printerReceiptPort || 9100} 
+                            onChange={handleChange} 
+                            className="p-2 rounded-lg border border-gray-300 outline-none text-sm w-20 font-mono text-center" 
+                            placeholder="9100" 
+                        />
+                    </div>
                 </div>
              </div>
           </div>
