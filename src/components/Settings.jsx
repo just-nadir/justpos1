@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Printer, Database, Store, Receipt, Percent, RefreshCw, ChefHat, Plus, Trash2, Users, Shield, Key } from 'lucide-react';
+import { Save, Printer, Database, Store, Receipt, Percent, RefreshCw, ChefHat, Plus, Trash2, Users, Shield, Key, Coins } from 'lucide-react';
 
 const Settings = () => {
   const [activeTab, setActiveTab] = useState('general');
   const [loading, setLoading] = useState(false);
   const [kitchens, setKitchens] = useState([]);
-  const [users, setUsers] = useState([]); // Xodimlar ro'yxati
+  const [users, setUsers] = useState([]); 
   
   const [newKitchen, setNewKitchen] = useState({ name: '', printer_ip: '192.168.1.', printer_port: 9100 });
-  const [newUser, setNewUser] = useState({ name: '', pin: '', role: 'waiter' }); // Yangi xodim
+  const [newUser, setNewUser] = useState({ name: '', pin: '', role: 'waiter' }); 
 
   const [settings, setSettings] = useState({
     restaurantName: "", address: "", phone: "", wifiPassword: "",
@@ -35,7 +35,6 @@ const Settings = () => {
         const kData = await ipcRenderer.invoke('get-kitchens');
         setKitchens(kData);
 
-        // Xodimlarni yuklash
         const uData = await ipcRenderer.invoke('get-users');
         setUsers(uData);
      } catch (err) { console.error(err); }
@@ -56,7 +55,6 @@ const Settings = () => {
     setLoading(false);
   };
 
-  // --- KITCHEN ACTIONS ---
   const handleSaveKitchen = async (e) => {
     e.preventDefault();
     if(!newKitchen.name) return;
@@ -78,7 +76,6 @@ const Settings = () => {
      }
   };
 
-  // --- USER ACTIONS (YANGI) ---
   const handleSaveUser = async (e) => {
     e.preventDefault();
     if (!newUser.name || !newUser.pin) return;
@@ -109,9 +106,16 @@ const Settings = () => {
     }
   };
 
+  const getRoleBadge = (role) => {
+      switch(role) {
+          case 'admin': return <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-bold uppercase">Admin</span>;
+          case 'cashier': return <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-bold uppercase">Kassir</span>;
+          default: return <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-bold uppercase">Ofitsiant</span>;
+      }
+  }
+
   return (
     <div className="flex w-full h-full bg-gray-100">
-      {/* SIDEBAR */}
       <div className="w-72 bg-white border-r border-gray-200 flex flex-col h-full p-4 shadow-sm z-10">
         <h2 className="text-xl font-bold text-gray-800 mb-6 px-2">Sozlamalar</h2>
         <div className="space-y-2">
@@ -129,9 +133,7 @@ const Settings = () => {
         </div>
       </div>
 
-      {/* CONTENT */}
       <div className="flex-1 overflow-y-auto p-8">
-        {/* GENERAL */}
         {activeTab === 'general' && (
           <div className="max-w-2xl space-y-6">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
@@ -149,10 +151,8 @@ const Settings = () => {
           </div>
         )}
 
-        {/* USERS (XODIMLAR) - YANGI */}
         {activeTab === 'users' && (
             <div className="max-w-3xl space-y-6">
-                {/* Add User */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Users size={20} className="text-blue-500"/> Xodim Qo'shish</h3>
                     <form onSubmit={handleSaveUser} className="grid grid-cols-12 gap-4 items-end">
@@ -169,8 +169,10 @@ const Settings = () => {
                         </div>
                         <div className="col-span-3">
                             <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Rol</label>
+                            {/* YANGI OPTION QO'SHILDI: Kassir */}
                             <select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} className="w-full p-3 rounded-xl border border-gray-200 outline-none focus:border-blue-500">
                                 <option value="waiter">Ofitsiant</option>
+                                <option value="cashier">Kassir</option>
                                 <option value="admin">Admin</option>
                             </select>
                         </div>
@@ -180,27 +182,23 @@ const Settings = () => {
                     </form>
                 </div>
 
-                {/* Users List */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <h3 className="text-lg font-bold text-gray-800 mb-4">Xodimlar Ro'yxati</h3>
                     <div className="space-y-2">
                         {users.map(u => (
                             <div key={u.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200 group">
                                 <div className="flex items-center gap-4">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${u.role === 'admin' ? 'bg-purple-500' : 'bg-green-500'}`}>
-                                        {u.role === 'admin' ? <Shield size={18} /> : <Users size={18} />}
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white 
+                                        ${u.role === 'admin' ? 'bg-purple-500' : u.role === 'cashier' ? 'bg-orange-500' : 'bg-blue-500'}`}>
+                                        {u.role === 'admin' ? <Shield size={18} /> : u.role === 'cashier' ? <Coins size={18} /> : <Users size={18} />}
                                     </div>
                                     <div>
                                         <p className="font-bold text-gray-800">{u.name}</p>
-                                        <p className="text-xs text-gray-500 font-mono flex items-center gap-1">
-                                            PIN: ••••
-                                        </p>
+                                        <p className="text-xs text-gray-500 font-mono flex items-center gap-1">PIN: ••••</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className={`text-xs font-bold px-2 py-1 rounded uppercase ${u.role === 'admin' ? 'bg-purple-100 text-purple-600' : 'bg-green-100 text-green-600'}`}>
-                                        {u.role}
-                                    </span>
+                                    {getRoleBadge(u.role)}
                                     <button onClick={() => handleDeleteUser(u.id)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={20}/></button>
                                 </div>
                             </div>
@@ -210,7 +208,6 @@ const Settings = () => {
             </div>
         )}
 
-        {/* ORDER */}
         {activeTab === 'order' && (
           <div className="max-w-2xl space-y-6">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
@@ -230,10 +227,8 @@ const Settings = () => {
           </div>
         )}
 
-        {/* KITCHENS & LAN PRINTERS */}
         {activeTab === 'kitchens' && (
           <div className="max-w-3xl space-y-6">
-             {/* Add New */}
              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                 <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Plus size={20} className="text-blue-500"/> Yangi Oshxona Qo'shish</h3>
                 <form onSubmit={handleSaveKitchen} className="grid grid-cols-12 gap-4 items-end">
@@ -251,7 +246,6 @@ const Settings = () => {
                 </form>
              </div>
 
-             {/* List */}
              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                 <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><ChefHat size={20} className="text-orange-500"/> Oshxonalar Ro'yxati</h3>
                 <div className="space-y-3">
@@ -271,7 +265,6 @@ const Settings = () => {
           </div>
         )}
 
-        {/* PRINTERS */}
         {activeTab === 'printers' && (
           <div className="max-w-2xl space-y-6">
              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
@@ -306,7 +299,6 @@ const Settings = () => {
           </div>
         )}
 
-        {/* DATABASE */}
         {activeTab === 'database' && (
           <div className="max-w-2xl space-y-6">
              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-red-500">

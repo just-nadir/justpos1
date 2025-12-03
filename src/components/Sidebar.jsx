@@ -12,19 +12,31 @@ const Sidebar = ({ activePage, onNavigate, onLogout, user }) => {
     { id: 'settings', icon: <Settings size={24} />, label: "Sozlamalar" },
   ];
 
-  // Agar user oddiy ofitsiant bo'lsa, Sozlamalar va Hisobotlarni yashirish mumkin
-  // Hozircha hammasi ochiq qolaversin
+  // Ruxsatlar mantiqi
+  const filteredItems = menuItems.filter(item => {
+    // Admin: Hammasi
+    if (user?.role === 'admin') return true; 
+    
+    // Kassir: Faqat Kassa, Mijozlar, Qarzdorlar
+    if (user?.role === 'cashier') {
+        return ['pos', 'customers', 'debtors'].includes(item.id);
+    }
+
+    return false; // Boshqalarga hech narsa yo'q
+  });
 
   return (
     <div className="w-24 bg-white h-screen flex flex-col items-center py-4 shadow-lg z-10">
-      {/* Logo / User Initials */}
-      <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-xl mb-8" title={user?.name}>
+      <div 
+        className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-xl mb-8 
+          ${user?.role === 'admin' ? 'bg-purple-600' : user?.role === 'cashier' ? 'bg-orange-600' : 'bg-blue-600'}`} 
+        title={user?.name + ` (${user?.role})`}
+      >
         {user?.name ? user.name.charAt(0).toUpperCase() : 'P'}
       </div>
 
-      {/* Menu Items */}
       <div className="flex-1 flex flex-col gap-4 w-full px-2">
-        {menuItems.map((item) => (
+        {filteredItems.map((item) => (
           <button 
             key={item.id}
             onClick={() => onNavigate(item.id)}
@@ -40,7 +52,6 @@ const Sidebar = ({ activePage, onNavigate, onLogout, user }) => {
         ))}
       </div>
 
-      {/* Bottom Actions (LOGOUT) */}
       <div className="flex flex-col gap-4 w-full px-2 mb-4">
         <button 
           onClick={onLogout} 

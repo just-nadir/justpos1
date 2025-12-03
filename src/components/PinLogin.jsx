@@ -26,9 +26,16 @@ const PinLogin = ({ onLogin }) => {
     try {
       if (window.require) {
         const { ipcRenderer } = window.require('electron');
-        // Backenddan login qilish
         const user = await ipcRenderer.invoke('login', pin);
-        onLogin(user); // Muvaffaqiyatli kirish
+        
+        // YANGI: Ofitsiantlarni bloklash
+        if (user.role === 'waiter') {
+            setError("Ofitsiantlar mobil ilovadan foydalanishi kerak!");
+            setPin('');
+            return;
+        }
+
+        onLogin(user); // Muvaffaqiyatli
       }
     } catch (err) {
       setError("PIN kod noto'g'ri!");
@@ -49,7 +56,6 @@ const PinLogin = ({ onLogin }) => {
           <p className="text-gray-500 text-sm">Shaxsiy PIN kodingizni kiriting</p>
         </div>
 
-        {/* PIN DISPLAY */}
         <div className="mb-8">
           <div className="flex justify-center gap-4 mb-2">
             {[0, 1, 2, 3].map((i) => (
@@ -59,29 +65,16 @@ const PinLogin = ({ onLogin }) => {
           <p className="h-6 text-center text-red-500 text-sm font-bold">{error}</p>
         </div>
 
-        {/* KEYPAD */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-            <button
-              key={num}
-              onClick={() => handleNumClick(num.toString())}
-              className="h-16 rounded-2xl bg-gray-50 hover:bg-gray-100 active:bg-blue-50 text-2xl font-bold text-gray-700 transition-colors shadow-sm border border-gray-100"
-            >
-              {num}
-            </button>
+            <button key={num} onClick={() => handleNumClick(num.toString())} className="h-16 rounded-2xl bg-gray-50 hover:bg-gray-100 active:bg-blue-50 text-2xl font-bold text-gray-700 transition-colors shadow-sm border border-gray-100">{num}</button>
           ))}
-          <div className="col-span-1"></div> {/* Bo'sh joy */}
+          <div className="col-span-1"></div> 
           <button onClick={() => handleNumClick('0')} className="h-16 rounded-2xl bg-gray-50 hover:bg-gray-100 active:bg-blue-50 text-2xl font-bold text-gray-700 transition-colors shadow-sm border border-gray-100">0</button>
-          <button onClick={handleDelete} className="h-16 rounded-2xl bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-500 flex items-center justify-center transition-colors shadow-sm border border-red-100">
-            <Delete size={24} />
-          </button>
+          <button onClick={handleDelete} className="h-16 rounded-2xl bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-500 flex items-center justify-center transition-colors shadow-sm border border-red-100"><Delete size={24} /></button>
         </div>
 
-        <button 
-          onClick={handleSubmit} 
-          disabled={pin.length !== 4 || loading}
-          className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold text-lg hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100"
-        >
+        <button onClick={handleSubmit} disabled={pin.length !== 4 || loading} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold text-lg hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100">
           {loading ? 'Tekshirilmoqda...' : 'Kirish'}
         </button>
       </div>
