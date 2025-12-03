@@ -5,7 +5,11 @@ const { app } = require('electron');
 const dbPath = path.join(app.getAppPath(), 'pos.db');
 const db = new Database(dbPath, { verbose: console.log });
 
-// --- SIGNALLAR TIZIMI ---
+// --- MUHIM: WAL REJIMINI YOQISH ---
+// Bu baza qotib qolishini oldini oladi
+db.pragma('journal_mode = WAL');
+
+// ... (qolgan kodlar o'zgarishsiz) ...
 const listeners = [];
 
 function onChange(callback) {
@@ -17,6 +21,7 @@ function notify(event, data) {
 }
 
 function initDB() {
+  // ... (table yaratish kodlari o'zgarishsiz) ...
   db.exec(`CREATE TABLE IF NOT EXISTS halls (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)`);
   db.exec(`CREATE TABLE IF NOT EXISTS tables (id INTEGER PRIMARY KEY AUTOINCREMENT, hall_id INTEGER, name TEXT NOT NULL, status TEXT DEFAULT 'free', guests INTEGER DEFAULT 0, start_time TEXT, total_amount REAL DEFAULT 0, FOREIGN KEY(hall_id) REFERENCES halls(id) ON DELETE CASCADE)`);
   db.exec(`CREATE TABLE IF NOT EXISTS customers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, phone TEXT, type TEXT DEFAULT 'standard', value INTEGER DEFAULT 0, balance REAL DEFAULT 0, birthday TEXT, debt REAL DEFAULT 0)`);
@@ -45,24 +50,21 @@ function initDB() {
       printer_port INTEGER DEFAULT 9100
     )
   `);
-
-  // --- YANGI: XODIMLAR JADVALI ---
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       pin TEXT NOT NULL UNIQUE,
-      role TEXT DEFAULT 'waiter' -- 'admin' yoki 'waiter'
+      role TEXT DEFAULT 'waiter'
     )
   `);
   
-  // Default Admin (Agar hech kim bo'lmasa)
+  // Default Data
   const stmtUsers = db.prepare('SELECT count(*) as count FROM users');
   if (stmtUsers.get().count === 0) {
      db.prepare("INSERT INTO users (name, pin, role) VALUES ('Admin', '1111', 'admin')").run();
   }
 
-  // Default Kitchens
   const stmtK = db.prepare('SELECT count(*) as count FROM kitchens');
   if (stmtK.get().count === 0) {
      const insertK = db.prepare('INSERT INTO kitchens (name, printer_ip) VALUES (?, ?)');

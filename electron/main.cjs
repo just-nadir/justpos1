@@ -1,21 +1,36 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
-const { initDB } = require('./database.cjs'); // Baza
-const startServer = require('./server.cjs');  // Server
-const staffController = require('./controllers/staffController.cjs');
+const { initDB } = require('./database.cjs'); 
+const startServer = require('./server.cjs');  
 
-// Controllerlarni import qilamiz
+// Controllerlar
 const tableController = require('./controllers/tableController.cjs');
 const productController = require('./controllers/productController.cjs');
 const orderController = require('./controllers/orderController.cjs');
 const userController = require('./controllers/userController.cjs');
 const settingsController = require('./controllers/settingsController.cjs');
+const staffController = require('./controllers/staffController.cjs');
+
+// --- MUHIM: XATOLIKLARNI USHLAB QOLISH (CRASH OLDINI OLISH) ---
+process.on('uncaughtException', (error) => {
+  console.error('Kutilmagan xatolik (Main):', error);
+  // Bu yerda xatolik oynasi chiqishini bloklaymiz
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Ushlanmagan Promise xatoligi:', reason);
+});
 
 app.disableHardwareAcceleration();
 
 function createWindow() {
-  initDB();
-  startServer();
+  // ... (eski kod o'zgarishsiz)
+  try {
+    initDB();
+    startServer();
+  } catch (err) {
+    console.error("Boshlang'ich yuklashda xato:", err);
+  }
 
   const win = new BrowserWindow({
     width: 1200,
@@ -28,16 +43,17 @@ function createWindow() {
   });
   
   win.loadURL('http://localhost:5173');
+  
+  // Renderer jarayoni qulasa, qayta yuklash
+  win.webContents.on('render-process-gone', (event, details) => {
+    console.error('Renderer jarayoni o\'ldi:', details.reason);
+    if (details.reason === 'crashed') {
+        win.reload();
+    }
+  });
 }
 
-// --- IPC HANDLERS ---
-
-// --- YANGI: XODIMLAR VA LOGIN ---
-ipcMain.handle('get-users', () => staffController.getUsers());
-ipcMain.handle('save-user', (e, user) => staffController.saveUser(user));
-ipcMain.handle('delete-user', (e, id) => staffController.deleteUser(id));
-ipcMain.handle('login', (e, pin) => staffController.login(pin));
-
+// ... (qolgan IPC handlerlar o'zgarishsiz) ...
 // Zallar & Stollar
 ipcMain.handle('get-halls', () => tableController.getHalls());
 ipcMain.handle('add-hall', (e, name) => tableController.addHall(name));
@@ -65,12 +81,17 @@ ipcMain.handle('add-product', (e, p) => productController.addProduct(p));
 ipcMain.handle('toggle-product-status', (e, data) => productController.toggleProductStatus(data.id, data.status));
 ipcMain.handle('delete-product', (e, id) => productController.deleteProduct(id));
 
-// Sozlamalar
+// Sozlamalar & Xodimlar
 ipcMain.handle('get-settings', () => settingsController.getSettings());
 ipcMain.handle('save-settings', (e, data) => settingsController.saveSettings(data));
 ipcMain.handle('get-kitchens', () => settingsController.getKitchens());
 ipcMain.handle('save-kitchen', (e, data) => settingsController.saveKitchen(data));
 ipcMain.handle('delete-kitchen', (e, id) => settingsController.deleteKitchen(id));
+
+ipcMain.handle('get-users', () => staffController.getUsers());
+ipcMain.handle('save-user', (e, user) => staffController.saveUser(user));
+ipcMain.handle('delete-user', (e, id) => staffController.deleteUser(id));
+ipcMain.handle('login', (e, pin) => staffController.login(pin));
 
 // Kassa & Xisobot
 ipcMain.handle('get-table-items', (e, id) => orderController.getTableItems(id));
