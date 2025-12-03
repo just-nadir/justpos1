@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Printer, Database, Store, Receipt, Percent, RefreshCw, ChefHat, Plus, Trash2, Users, Shield, Key, Coins } from 'lucide-react';
+import { Save, Printer, Database, Store, Receipt, Percent, RefreshCw, ChefHat, Plus, Trash2, Users, Shield, Key, Coins, CheckCircle } from 'lucide-react';
+import ConfirmModal from './ConfirmModal';
 
 const Settings = () => {
   const [activeTab, setActiveTab] = useState('general');
   const [loading, setLoading] = useState(false);
   const [kitchens, setKitchens] = useState([]);
   const [users, setUsers] = useState([]); 
+  const [notification, setNotification] = useState(null); // { type: 'success'|'error', msg: '' }
   
   const [newKitchen, setNewKitchen] = useState({ name: '', printer_ip: '192.168.1.', printer_port: 9100 });
   const [newUser, setNewUser] = useState({ name: '', pin: '', role: 'waiter' }); 
+
+  // Modal State
+  const [modal, setModal] = useState({ isOpen: false, type: null, id: null, message: '' });
 
   const [settings, setSettings] = useState({
     restaurantName: "", address: "", phone: "", wifiPassword: "",
@@ -19,6 +24,16 @@ const Settings = () => {
   useEffect(() => {
     loadAllData();
   }, []);
+
+  // Xabarni 3 soniyadan keyin o'chirish
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
+
+  const showNotify = (type, msg) => setNotification({ type, msg });
 
   const loadAllData = async () => {
      if (!window.require) return;
@@ -50,7 +65,7 @@ const Settings = () => {
     try {
         const { ipcRenderer } = window.require('electron');
         await ipcRenderer.invoke('save-settings', settings);
-        alert("Sozlamalar saqlandi!");
+        showNotify('success', "Sozlamalar saqlandi!");
     } catch (err) { console.error(err); }
     setLoading(false);
   };
@@ -63,17 +78,34 @@ const Settings = () => {
        await ipcRenderer.invoke('save-kitchen', newKitchen);
        setNewKitchen({ name: '', printer_ip: '192.168.1.', printer_port: 9100 }); 
        loadAllData(); 
+       showNotify('success', "Oshxona qo'shildi");
     } catch (err) { console.error(err); }
   };
 
-  const handleDeleteKitchen = async (id) => {
-     if(window.confirm("Oshxonani o'chirmoqchimisiz?")) {
-        try {
-           const { ipcRenderer } = window.require('electron');
-           await ipcRenderer.invoke('delete-kitchen', id);
-           loadAllData();
-        } catch(err) { console.error(err); }
-     }
+  const handleDeleteAction = async () => {
+    try {
+       const { ipcRenderer } = window.require('electron');
+       if (modal.type === 'kitchen') {
+          await ipcRenderer.invoke('delete-kitchen', modal.id);
+       } else if (modal.type === 'user') {
+          await ipcRenderer.invoke('delete-user', modal.id);
+       } else if (modal.type === 'backup') {
+          // Backup logic here
+          console.log("Backup started...");
+       }
+       loadAllData();
+       showNotify('success', "O'chirildi");
+    } catch(err) { 
+        showNotify('error', err.message); 
+    }
+  };
+
+  const confirmDeleteKitchen = (id) => {
+      setModal({ isOpen: true, type: 'kitchen', id, message: "Oshxonani o'chirmoqchimisiz?" });
+  };
+
+  const confirmDeleteUser = (id) => {
+      setModal({ isOpen: true, type: 'user', id, message: "Xodimni o'chirmoqchimisiz?" });
   };
 
   const handleSaveUser = async (e) => {
@@ -84,26 +116,14 @@ const Settings = () => {
         await ipcRenderer.invoke('save-user', newUser);
         setNewUser({ name: '', pin: '', role: 'waiter' });
         loadAllData();
-        alert("Xodim saqlandi!");
+        showNotify('success', "Xodim saqlandi!");
     } catch (err) {
-        alert("Xatolik: " + err.message);
+        showNotify('error', err.message);
     }
   };
 
-  const handleDeleteUser = async (id) => {
-      if(window.confirm("Xodimni o'chirmoqchimisiz?")) {
-          try {
-              const { ipcRenderer } = window.require('electron');
-              await ipcRenderer.invoke('delete-user', id);
-              loadAllData();
-          } catch (err) { alert(err.message); }
-      }
-  };
-
-  const handleBackup = async () => {
-    if(window.confirm("Ma'lumotlar bazasidan nusxa olinsinmi?")) {
-        alert("Backup funksiyasi tez orada qo'shiladi.");
-    }
+  const handleBackupClick = () => {
+      setModal({ isOpen: true, type: 'backup', id: null, message: "Ma'lumotlar bazasidan nusxa olinsinmi?" });
   };
 
   const getRoleBadge = (role) => {
@@ -115,7 +135,15 @@ const Settings = () => {
   }
 
   return (
-    <div className="flex w-full h-full bg-gray-100">
+    <div className="flex w-full h-full bg-gray-100 relative">
+      {/* NOTIFICATION TOAST */}
+      {notification && (
+        <div className={`absolute top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-2xl flex items-center gap-2 text-white font-bold animate-in slide-in-from-top duration-300 ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+           {notification.type === 'success' ? <CheckCircle size={20}/> : <Shield size={20}/>}
+           {notification.msg}
+        </div>
+      )}
+
       <div className="w-72 bg-white border-r border-gray-200 flex flex-col h-full p-4 shadow-sm z-10">
         <h2 className="text-xl font-bold text-gray-800 mb-6 px-2">Sozlamalar</h2>
         <div className="space-y-2">
@@ -169,7 +197,6 @@ const Settings = () => {
                         </div>
                         <div className="col-span-3">
                             <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Rol</label>
-                            {/* YANGI OPTION QO'SHILDI: Kassir */}
                             <select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} className="w-full p-3 rounded-xl border border-gray-200 outline-none focus:border-blue-500">
                                 <option value="waiter">Ofitsiant</option>
                                 <option value="cashier">Kassir</option>
@@ -199,7 +226,7 @@ const Settings = () => {
                                 </div>
                                 <div className="flex items-center gap-2">
                                     {getRoleBadge(u.role)}
-                                    <button onClick={() => handleDeleteUser(u.id)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={20}/></button>
+                                    <button onClick={() => confirmDeleteUser(u.id)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={20}/></button>
                                 </div>
                             </div>
                         ))}
@@ -257,7 +284,7 @@ const Settings = () => {
                                 <Printer size={12} /> {k.printer_ip ? `IP: ${k.printer_ip}:${k.printer_port}` : "Printer ulanmagan"}
                              </p>
                           </div>
-                          <button onClick={() => handleDeleteKitchen(k.id)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={20}/></button>
+                          <button onClick={() => confirmDeleteKitchen(k.id)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={20}/></button>
                        </div>
                    ))}
                 </div>
@@ -305,12 +332,20 @@ const Settings = () => {
                 <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2"><Database size={20} className="text-red-500"/> Ma'lumotlar Bazasi</h3>
                 <p className="text-sm text-gray-500 mb-6">Ehtiyot bo'ling! Ma'lumotlarni yo'qotmaslik uchun tez-tez nusxa olib turing.</p>
                 <div className="flex gap-4">
-                   <button onClick={handleBackup} className="px-6 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors flex items-center gap-2"><Save size={18} /> Backup (Nusxa olish)</button>
+                   <button onClick={handleBackupClick} className="px-6 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors flex items-center gap-2"><Save size={18} /> Backup (Nusxa olish)</button>
                 </div>
              </div>
           </div>
         )}
       </div>
+
+      <ConfirmModal 
+        isOpen={modal.isOpen} 
+        onClose={() => setModal({ ...modal, isOpen: false })} 
+        onConfirm={handleDeleteAction} 
+        message={modal.message}
+        title="Tasdiqlang"
+      />
     </div>
   );
 };

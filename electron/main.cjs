@@ -1,18 +1,15 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
-const log = require('electron-log'); // IMPORT QILINDI
+const log = require('electron-log');
+// DATABASE DAN 'onChange' NI IMPORT QILISH KERAK
+const { initDB, onChange } = require('./database.cjs'); 
+const startServer = require('./server.cjs');  
 
 // --- LOGGER SOZLAMALARI ---
-// Log fayli joylashuvi: C:\Users\User\AppData\Roaming\my-pos\logs\logs.txt (Windowsda)
 log.transports.file.level = 'info';
-log.transports.file.fileName = 'logs.txt'; // Fayl nomi
+log.transports.file.fileName = 'logs.txt';
 log.transports.file.format = '[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}] {text}';
-
-// Console funksiyalarini logga yo'naltiramiz
 Object.assign(console, log.functions);
-
-const { initDB } = require('./database.cjs'); 
-const startServer = require('./server.cjs');  
 
 // Controllerlar
 const tableController = require('./controllers/tableController.cjs');
@@ -22,11 +19,9 @@ const userController = require('./controllers/userController.cjs');
 const settingsController = require('./controllers/settingsController.cjs');
 const staffController = require('./controllers/staffController.cjs');
 
-// --- XATOLIKLARNI USHLASH (LOGGA YOZISH) ---
 process.on('uncaughtException', (error) => {
   log.error('KRITIK XATOLIK (Main):', error);
 });
-
 process.on('unhandledRejection', (reason) => {
   log.error('Ushlanmagan Promise:', reason);
 });
@@ -37,7 +32,7 @@ function createWindow() {
   try {
     initDB();
     startServer();
-    log.info("Dastur ishga tushdi. Baza va Server yondi."); // Log
+    log.info("Dastur ishga tushdi. Baza va Server yondi.");
   } catch (err) {
     log.error("Boshlang'ich yuklashda xato:", err);
   }
@@ -48,10 +43,21 @@ function createWindow() {
     backgroundColor: '#f3f4f6',
     webPreferences: {
       nodeIntegration: true,
-      contextIsolation: false,
+      contextIsolation: false, // Preload ishlatilmasa false bo'lishi kerak, lekin sizda preload bor.
+      // Agar preload.cjs ishlatilayotgan bo'lsa, uni shu yerga ulash kerak:
+      preload: path.join(__dirname, 'preload.cjs') 
     },
   });
-  
+
+  // --- YANGI QO'SHILGAN QISM: REAL-TIME UPDATE ---
+  // Bazada o'zgarish bo'lganda (notify), darhol oynaga xabar yuboramiz
+  onChange((type, id) => {
+    if (!win.isDestroyed()) {
+      win.webContents.send('db-change', { type, id });
+    }
+  });
+  // ----------------------------------------------
+
   win.loadURL('http://localhost:5173');
   
   win.webContents.on('render-process-gone', (event, details) => {
@@ -61,8 +67,6 @@ function createWindow() {
     }
   });
 }
-
-// ... IPC Handlerlar (o'zgarishsiz qoladi, chunki console.log endi faylga yozadi) ...
 
 // Zallar & Stollar
 ipcMain.handle('get-halls', () => tableController.getHalls());

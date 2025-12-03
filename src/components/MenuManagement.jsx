@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Power, X, ChefHat } from 'lucide-react';
+import ConfirmModal from './ConfirmModal';
 
 const ProductModal = ({ isOpen, onClose, onSubmit, newProduct, setNewProduct, categories, kitchens }) => {
   if (!isOpen) return null;
@@ -57,8 +58,10 @@ const MenuManagement = () => {
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  // Default qiymatlar inputlar qotib qolmasligi uchun muhim
   const [newProduct, setNewProduct] = useState({ name: '', price: '', category_id: '', destination: '1' });
+
+  // Delete Modal State
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, id: null });
 
   const loadData = async () => {
     if (!window.require) return;
@@ -108,18 +111,22 @@ const MenuManagement = () => {
     loadData();
   };
 
-  const handleDelete = async (id) => {
-    if(window.confirm("O'chirilsinmi?")) {
+  const confirmDelete = (id) => {
+    setConfirmModal({ isOpen: true, id });
+  };
+
+  const performDelete = async () => {
+    try {
       const { ipcRenderer } = window.require('electron');
-      await ipcRenderer.invoke('delete-product', id);
+      await ipcRenderer.invoke('delete-product', confirmModal.id);
       loadData();
-    }
+    } catch(err) { console.error(err); }
   };
 
   const filteredProducts = products.filter(p => p.category_id === activeCategory);
 
   return (
-    <div className="flex w-full h-full">
+    <div className="flex w-full h-full relative">
       {/* SIDEBAR (Kategoriyalar) */}
       <div className="w-80 bg-white border-r border-gray-200 flex flex-col h-full">
         <div className="p-6 border-b border-gray-100 flex justify-between items-center">
@@ -168,7 +175,7 @@ const MenuManagement = () => {
                 </div>
                 <h3 className="font-bold text-gray-800 mb-1 line-clamp-1">{product.name}</h3>
                 <p className="text-blue-600 font-bold">{product.price.toLocaleString()} so'm</p>
-                <button onClick={() => handleDelete(product.id)} className="absolute bottom-4 right-4 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={18} /></button>
+                <button onClick={() => confirmDelete(product.id)} className="absolute bottom-4 right-4 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={18} /></button>
               </div>
             ))}
           </div>
@@ -176,6 +183,13 @@ const MenuManagement = () => {
       </div>
 
       <ProductModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSubmit={handleAddProduct} newProduct={newProduct} setNewProduct={setNewProduct} categories={categories} kitchens={kitchens} />
+      
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+        onConfirm={performDelete}
+        message="Taomni o'chirmoqchimisiz?"
+      />
     </div>
   );
 };

@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { User, Calendar, FileText, ArrowDownLeft, ArrowUpRight, Wallet, Search } from 'lucide-react';
+import { User, Calendar, FileText, ArrowDownLeft, ArrowUpRight, Wallet, Search, CheckCircle } from 'lucide-react';
 
 const DebtorsManagement = () => {
   const [debtors, setDebtors] = useState([]);
   const [activeDebtor, setActiveDebtor] = useState(null);
   const [history, setHistory] = useState([]);
-  
-  // To'lov summasi inputi
   const [payAmount, setPayAmount] = useState('');
+  const [isSuccess, setIsSuccess] = useState(false);
 
   // 1. Qarzdorlarni yuklash
   const loadDebtors = async () => {
@@ -16,20 +15,17 @@ const DebtorsManagement = () => {
       const data = await ipcRenderer.invoke('get-debtors');
       setDebtors(data);
       
-      // Agar hozir biror kishi tanlangan bo'lsa, uning ma'lumotini yangilaymiz
       if (activeDebtor) {
         const updated = data.find(d => d.id === activeDebtor.id);
         if (updated) {
             setActiveDebtor(updated);
         } else {
-            // Agar qarzi 0 bo'lib ro'yxatdan chiqib ketgan bo'lsa
             setActiveDebtor(null); 
         }
       }
     } catch (err) { console.error(err); }
   };
 
-  // 2. Tarixni yuklash
   const loadHistory = async (id) => {
     try {
       const { ipcRenderer } = window.require('electron');
@@ -46,6 +42,13 @@ const DebtorsManagement = () => {
     }
   }, [activeDebtor]);
 
+  useEffect(() => {
+      if(isSuccess) {
+          const timer = setTimeout(() => setIsSuccess(false), 3000);
+          return () => clearTimeout(timer);
+      }
+  }, [isSuccess]);
+
   // 3. Qarzni to'lash
   const handlePayDebt = async (e) => {
     e.preventDefault();
@@ -60,14 +63,21 @@ const DebtorsManagement = () => {
       });
       
       setPayAmount('');
-      loadDebtors(); // Ro'yxatni yangilash (summa kamayishi uchun)
-      loadHistory(activeDebtor.id); // Tarixni yangilash
-      alert("To'lov qabul qilindi!");
+      loadDebtors();
+      loadHistory(activeDebtor.id);
+      setIsSuccess(true); // Alert o'rniga state
     } catch (err) { console.error(err); }
   };
 
   return (
-    <div className="flex w-full h-full bg-gray-100">
+    <div className="flex w-full h-full bg-gray-100 relative">
+      {/* Toast Notification */}
+      {isSuccess && (
+          <div className="absolute top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2 animate-in slide-in-from-top duration-300">
+              <CheckCircle size={20} /> To'lov qabul qilindi!
+          </div>
+      )}
+
       {/* 2-QISM: RO'YXAT (Oq fon) */}
       <div className="w-80 bg-white border-r border-gray-200 flex flex-col h-full shadow-sm z-10">
         <div className="p-6 border-b border-gray-100">

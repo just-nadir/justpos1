@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-// Armchair ikonkasini importga qo'shdik:
 import { Plus, Trash2, Layout, Square, Armchair, X } from 'lucide-react';
+import ConfirmModal from './ConfirmModal';
 
 // --- MODAL KOMPONENT ---
 const TableModal = ({ isOpen, onClose, onSubmit, newTableName, setNewTableName, activeHallName }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] animate-in fade-in duration-200">
       <div className="bg-white w-[400px] rounded-2xl shadow-2xl p-6 relative">
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={24} /></button>
         <h2 className="text-xl font-bold text-gray-800 mb-2">Yangi Stol</h2>
@@ -33,6 +33,9 @@ const TablesManagement = () => {
   const [newHallName, setNewHallName] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newTableName, setNewTableName] = useState('');
+
+  // Delete Modal State
+  const [modal, setModal] = useState({ isOpen: false, type: null, id: null, message: '' });
 
   const loadHalls = async () => {
     try {
@@ -65,13 +68,26 @@ const TablesManagement = () => {
     loadHalls();
   };
 
-  const handleDeleteHall = async (id) => {
-    if (window.confirm("Zal va stollar o'chirilsinmi?")) {
+  const confirmDeleteHall = (id) => {
+      setModal({ isOpen: true, type: 'hall', id, message: "Zal va stollar o'chirilsinmi?" });
+  };
+
+  const confirmDeleteTable = (id) => {
+      setModal({ isOpen: true, type: 'table', id, message: "Stol o'chirilsinmi?" });
+  };
+
+  const performDelete = async () => {
+    try {
       const { ipcRenderer } = window.require('electron');
-      await ipcRenderer.invoke('delete-hall', id);
-      if (activeHall === id) setActiveHall(null);
-      loadHalls();
-    }
+      if (modal.type === 'hall') {
+          await ipcRenderer.invoke('delete-hall', modal.id);
+          if (activeHall === modal.id) setActiveHall(null);
+          loadHalls();
+      } else if (modal.type === 'table') {
+          await ipcRenderer.invoke('delete-table', modal.id);
+          loadTables();
+      }
+    } catch(err) { console.error(err); }
   };
 
   const handleAddTable = async (e) => {
@@ -86,18 +102,10 @@ const TablesManagement = () => {
     } catch (err) { console.error(err); }
   };
 
-  const handleDeleteTable = async (id) => {
-    if (window.confirm("Stol o'chirilsinmi?")) {
-      const { ipcRenderer } = window.require('electron');
-      await ipcRenderer.invoke('delete-table', id);
-      loadTables();
-    }
-  };
-
   const activeHallObj = halls.find(h => h.id === activeHall);
 
   return (
-    <div className="flex w-full h-full">
+    <div className="flex w-full h-full relative">
       {/* 2-QISM: ZALLAR */}
       <div className="w-80 bg-white border-r border-gray-200 flex flex-col h-full">
         <div className="p-6 border-b border-gray-100 flex justify-between items-center">
@@ -122,7 +130,7 @@ const TablesManagement = () => {
                 className={`w-full text-left px-4 py-3 rounded-xl font-medium transition-colors flex justify-between items-center ${activeHall === hall.id ? 'bg-blue-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}>
                 {hall.name}
               </button>
-              <button onClick={() => handleDeleteHall(hall.id)} className={`absolute right-2 top-2.5 p-1 text-gray-300 hover:text-red-200 opacity-0 group-hover:opacity-100 ${activeHall === hall.id ? 'hover:text-red-200' : 'hover:text-red-500'}`}><Trash2 size={16} /></button>
+              <button onClick={() => confirmDeleteHall(hall.id)} className={`absolute right-2 top-2.5 p-1 text-gray-300 hover:text-red-200 opacity-0 group-hover:opacity-100 ${activeHall === hall.id ? 'hover:text-red-200' : 'hover:text-red-500'}`}><Trash2 size={16} /></button>
             </div>
           ))}
         </div>
@@ -148,13 +156,11 @@ const TablesManagement = () => {
                 <div key={table.id} className="bg-white p-6 rounded-2xl shadow-sm border-2 border-transparent hover:border-blue-400 transition-all group flex flex-col items-center justify-center text-center relative aspect-[4/3]">
                   <div className="mb-2 text-blue-100 group-hover:text-blue-500 transition-colors"><Square size={40} /></div>
                   <h3 className="font-bold text-gray-800 text-lg mb-1">{table.name}</h3>
-                  
-                  {/* BU YERDA ARMCHAIR ISHLATILGAN EDI, ENDI IMPORT QILINDI */}
                   <div className="text-gray-400 text-xs flex items-center gap-1">
                      <Armchair size={12} /> Standard
                   </div>
 
-                  <button onClick={() => handleDeleteTable(table.id)} className="absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16} /></button>
+                  <button onClick={() => confirmDeleteTable(table.id)} className="absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16} /></button>
                 </div>
               ))}
               {tables.length === 0 && <div className="col-span-full text-center text-gray-400 py-20 border-2 border-dashed rounded-2xl"><Layout size={40} className="mx-auto mb-2 opacity-20"/>Stollar yo'q</div>}
@@ -166,6 +172,13 @@ const TablesManagement = () => {
       </div>
 
       <TableModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSubmit={handleAddTable} newTableName={newTableName} setNewTableName={setNewTableName} activeHallName={activeHallObj?.name} />
+      
+      <ConfirmModal 
+        isOpen={modal.isOpen} 
+        onClose={() => setModal({ ...modal, isOpen: false })} 
+        onConfirm={performDelete} 
+        message={modal.message}
+      />
     </div>
   );
 };

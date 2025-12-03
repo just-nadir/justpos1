@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, User, Wallet, Percent, Users, Calendar, Gift, X } from 'lucide-react';
+import ConfirmModal from './ConfirmModal';
 
 // --- MODAL KOMPONENT ---
 const CustomerModal = ({ isOpen, onClose, onSubmit, newCustomer, setNewCustomer }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] animate-in fade-in duration-200">
       <div className="bg-white w-[500px] rounded-2xl shadow-2xl p-6 relative">
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
           <X size={24} />
@@ -77,6 +78,8 @@ const CustomersManagement = () => {
     birthday: ''
   });
 
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, id: null });
+
   const loadData = async () => {
     try {
       const { ipcRenderer } = window.require('electron');
@@ -98,12 +101,16 @@ const CustomersManagement = () => {
     } catch (err) { console.error(err); }
   };
 
-  const handleDelete = async (id) => {
-    if(window.confirm("Mijoz o'chirilsinmi?")) {
+  const confirmDelete = (id) => {
+      setConfirmModal({ isOpen: true, id });
+  };
+
+  const performDelete = async () => {
+    try {
       const { ipcRenderer } = window.require('electron');
-      await ipcRenderer.invoke('delete-customer', id);
+      await ipcRenderer.invoke('delete-customer', confirmModal.id);
       loadData();
-    }
+    } catch(err) { console.error(err); }
   };
 
   // Filterlash logic
@@ -119,7 +126,7 @@ const CustomersManagement = () => {
   };
 
   return (
-    <div className="flex w-full h-full">
+    <div className="flex w-full h-full relative">
       {/* 2-QISM: SIDEBAR FILTERS */}
       <div className="w-64 bg-white border-r border-gray-200 p-4 flex flex-col shadow-sm z-10">
         <h2 className="text-xl font-bold text-gray-800 mb-6 px-2">Guruhlar</h2>
@@ -177,7 +184,7 @@ const CustomersManagement = () => {
                    )}
                 </div>
 
-                <button onClick={() => handleDelete(customer.id)} className="absolute top-3 right-3 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={18} /></button>
+                <button onClick={() => confirmDelete(customer.id)} className="absolute top-3 right-3 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={18} /></button>
               </div>
             ))}
           </div>
@@ -185,6 +192,12 @@ const CustomersManagement = () => {
       </div>
 
       <CustomerModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSubmit={handleAddCustomer} newCustomer={newCustomer} setNewCustomer={setNewCustomer} />
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen} 
+        onClose={() => setConfirmModal({...confirmModal, isOpen: false})} 
+        onConfirm={performDelete} 
+        message="Mijozni o'chirmoqchimisiz?"
+      />
     </div>
   );
 };

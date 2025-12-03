@@ -1,40 +1,45 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Users, Clock, ChevronLeft, ShoppingBag, Trash2, Plus, Minus, CheckCircle, X, LogOut, User } from 'lucide-react';
+import { Users, Clock, ChevronLeft, ShoppingBag, Trash2, Plus, Minus, CheckCircle, X, LogOut, User, AlertTriangle } from 'lucide-react';
 
 // Hooks
 import { useSocketData } from '../hooks/useSocketData';
 import { useCart } from '../hooks/useCart';
 import { useMenu } from '../hooks/useMenu';
-import MobilePinLogin from './MobilePinLogin'; // Yangi import
+import MobilePinLogin from './MobilePinLogin'; 
+import ConfirmModal from '../components/ConfirmModal'; // Desktopdagini ishlatamiz
 
 const WaiterApp = () => {
-  // --- AUTH STATE ---
-  const [user, setUser] = useState(null); // Tizimga kirgan ofitsiant
-
-  // Mavjud statelar
+  const [user, setUser] = useState(null); 
   const [view, setView] = useState('tables'); 
   const [activeTable, setActiveTable] = useState(null);
   const [showGuestModal, setShowGuestModal] = useState(false);
   const [guestCount, setGuestCount] = useState(2); 
+  
+  // Modals & Notifications
+  const [showConfirmLogout, setShowConfirmLogout] = useState(false);
+  const [showConfirmOrder, setShowConfirmOrder] = useState(false);
+  const [toast, setToast] = useState(null); // {type: 'success'|'error', msg: ''}
 
-  // Hooks
   const { tables, serviceType, loadTables, API_URL } = useSocketData();
   const { cart, addToCart, removeFromCart, clearCart, cartTotal, cartCount } = useCart();
   const { categories, products, activeCategory, setActiveCategory, loading, loadMenu } = useMenu(API_URL);
 
-  // --- AGAR LOGIN QILMAGAN BO'LSA ---
+  useEffect(() => {
+      if(toast) {
+          const timer = setTimeout(() => setToast(null), 3000);
+          return () => clearTimeout(timer);
+      }
+  }, [toast]);
+
   if (!user) {
     return <MobilePinLogin apiUrl={API_URL} onLogin={(u) => setUser(u)} />;
   }
 
-  // --- LOGIC ---
-
   const handleLogout = () => {
-    if(window.confirm("Tizimdan chiqasizmi?")) {
-        setUser(null);
-        setView('tables');
-    }
+      setUser(null);
+      setView('tables');
+      setShowConfirmLogout(false);
   };
 
   const handleTableClick = (table) => {
@@ -64,8 +69,7 @@ const WaiterApp = () => {
 
   const sendOrder = async () => {
     if (!activeTable || cart.length === 0) return;
-    if(!window.confirm(`Jami ${cartTotal.toLocaleString()} so'm. Yuboraymi?`)) return;
-
+    
     try {
       await axios.post(`${API_URL}/tables/guests`, {
           tableId: activeTable.id,
@@ -75,16 +79,17 @@ const WaiterApp = () => {
       await axios.post(`${API_URL}/orders/bulk-add`, {
           tableId: activeTable.id,
           items: cart,
-          waiterId: user.id // Ofitsiant ID sini ham qo'shib qo'yamiz (keyinchalik kerak bo'ladi)
+          waiterId: user.id 
       });
       
-      alert("Buyurtma qabul qilindi! ✅");
+      setToast({ type: 'success', msg: "Buyurtma qabul qilindi!" });
       clearCart();
       setView('tables');
     } catch (err) {
       console.error(err);
-      alert("Xatolik: Internetni tekshiring");
+      setToast({ type: 'error', msg: "Internetni tekshiring" });
     }
+    setShowConfirmOrder(false);
   };
 
   const handleBack = () => {
@@ -96,8 +101,6 @@ const WaiterApp = () => {
       setGuestCount(activeTable.guests || 2);
       setShowGuestModal(true);
   };
-
-  // --- UI COMPONENTS ---
 
   const GuestModal = () => {
       if (!showGuestModal) return null;
@@ -135,8 +138,25 @@ const WaiterApp = () => {
   // TABLES VIEW
   if (view === 'tables') {
     return (
-      <div className="min-h-screen bg-gray-100 pb-20">
+      <div className="min-h-screen bg-gray-100 pb-20 relative">
         <GuestModal />
+        
+        {/* Toast */}
+        {toast && (
+            <div className={`fixed top-4 left-4 right-4 z-50 px-4 py-3 rounded-xl shadow-xl text-white font-bold flex items-center justify-center gap-2 animate-in slide-in-from-top ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-500'}`}>
+                {toast.type === 'success' ? <CheckCircle /> : <AlertTriangle />} {toast.msg}
+            </div>
+        )}
+
+        <ConfirmModal 
+            isOpen={showConfirmLogout}
+            onClose={() => setShowConfirmLogout(false)}
+            onConfirm={handleLogout}
+            title="Chiqish"
+            message="Tizimdan chiqmoqchimisiz?"
+            confirmText="Ha, chiqish"
+        />
+
         <div className="bg-blue-600 text-white p-4 sticky top-0 z-10 shadow-md flex justify-between items-center">
           <div>
             <h1 className="text-xl font-bold flex items-center gap-2">
@@ -144,7 +164,7 @@ const WaiterApp = () => {
             </h1>
             <p className="text-xs text-blue-200">Ofitsiant Paneli</p>
           </div>
-          <button onClick={handleLogout} className="p-2 bg-blue-500 rounded-full active:scale-95 text-white hover:bg-red-500 transition-colors">
+          <button onClick={() => setShowConfirmLogout(true)} className="p-2 bg-blue-500 rounded-full active:scale-95 text-white hover:bg-red-500 transition-colors">
               <LogOut size={20}/>
           </button>
         </div>
@@ -177,9 +197,20 @@ const WaiterApp = () => {
 
   // MENU & CART VIEW
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col h-screen overflow-hidden">
+    <div className="min-h-screen bg-gray-50 flex flex-col h-screen overflow-hidden relative">
       <GuestModal />
       
+      {/* Confirm Order Modal */}
+      <ConfirmModal 
+          isOpen={showConfirmOrder}
+          onClose={() => setShowConfirmOrder(false)}
+          onConfirm={sendOrder}
+          title="Buyurtmani tasdiqlash"
+          message={`Jami: ${cartTotal.toLocaleString()} so'm. Yuboraymi?`}
+          confirmText="Yuborish"
+          isDanger={false}
+      />
+
       <div className="bg-white p-3 shadow-sm border-b flex items-center gap-3 z-20">
         <button onClick={handleBack} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200">
             <ChevronLeft size={24} />
@@ -256,7 +287,7 @@ const WaiterApp = () => {
               <span className="text-xl font-bold text-gray-900">{cartTotal.toLocaleString()} so'm</span>
            </div>
            {view === 'cart' ? (
-             <button onClick={sendOrder} className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold text-lg shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2">Buyurtmani Tasdiqlash</button>
+             <button onClick={() => setShowConfirmOrder(true)} className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold text-lg shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2">Buyurtmani Tasdiqlash</button>
            ) : (
              <button onClick={() => setView('cart')} className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-bold text-lg shadow-lg active:scale-95 transition-transform">Savatchaga O'tish</button>
            )}

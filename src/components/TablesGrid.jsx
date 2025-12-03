@@ -4,19 +4,18 @@ import { Users, Clock, Receipt } from 'lucide-react';
 const TablesGrid = ({ onSelectTable }) => {
   const [tables, setTables] = useState([]);
   const [halls, setHalls] = useState([]);
-  const [activeHallId, setActiveHallId] = useState('all'); // 'all' yoki hall_id
+  const [activeHallId, setActiveHallId] = useState('all'); 
   const [loading, setLoading] = useState(true);
 
-  // Ma'lumotlarni yuklash (Zallar va Stollar)
   const loadData = async () => {
     try {
-      const { ipcRenderer } = window.require('electron');
+      // Agar window.electron bo'lmasa (masalan brauzerda), oddiy require ishlatamiz
+      const ipc = window.electron ? window.electron.ipcRenderer : window.require('electron').ipcRenderer;
       
-      const hallsData = await ipcRenderer.invoke('get-halls');
+      const hallsData = await ipc.invoke('get-halls');
       setHalls(hallsData);
 
-      // Kassa uchun barcha stollarni olib kelamiz, keyin filterlaymiz
-      const tablesData = await ipcRenderer.invoke('get-tables');
+      const tablesData = await ipc.invoke('get-tables');
       setTables(tablesData);
       
       setLoading(false);
@@ -29,16 +28,47 @@ const TablesGrid = ({ onSelectTable }) => {
   useEffect(() => {
     loadData();
     
-    // Har 5 sekundda ma'lumotni yangilab turish (Real-time effekt uchun)
-    const interval = setInterval(loadData, 5000);
-    return () => clearInterval(interval);
+    // --- YANGI: Real-time Listener ---
+    // Main processdan 'db-change' xabari kelsa, ma'lumotni yangilaymiz
+    let removeListener = () => {};
+
+    if (window.electron && window.electron.ipcRenderer) {
+        // Preload orqali (xavfsiz yo'l)
+        // Eslatma: Sizning preload kodingizda 'on' funksiyasi bor, lekin u listenerni o'chirish uchun funksiya qaytarmasligi mumkin.
+        // Shu sababli, biz 'removeAllListeners' dan foydalanamiz komponent o'chirilganda.
+        window.electron.ipcRenderer.on('db-change', (event, data) => {
+            // Agar stollar yoki savdo o'zgarsa, yangilaymiz
+            if (data.type === 'tables' || data.type === 'sales' || data.type === 'table-items') {
+                loadData();
+            }
+        });
+
+        removeListener = () => {
+            window.electron.ipcRenderer.removeAllListeners('db-change');
+        };
+    } else if (window.require) {
+        // Direct require orqali (agar nodeIntegration true bo'lsa)
+        const { ipcRenderer } = window.require('electron');
+        const handler = (event, data) => {
+             if (data.type === 'tables' || data.type === 'sales' || data.type === 'table-items') {
+                loadData();
+            }
+        };
+        ipcRenderer.on('db-change', handler);
+        removeListener = () => ipcRenderer.removeListener('db-change', handler);
+    }
+
+    // Fallback: Har 30 sekundda bir marta tekshirib turish (xavfsizlik uchun)
+    const interval = setInterval(loadData, 30000);
+
+    return () => {
+        clearInterval(interval);
+        removeListener();
+    };
   }, []);
 
-  // Filterlash:
-  // 1. Faqat BAND (occupied) yoki TO'LOV (payment) stollarni ko'rsatamiz
-  // 2. Agar activeHallId tanlangan bo'lsa, faqat o'sha zalni ko'rsatamiz
   const filteredTables = tables.filter(table => {
-    const isActiveStatus = table.status !== 'free'; // Bo'sh stollar kassirga kerak emas
+    const isActiveStatus = table.status !== 'free'; 
     const isHallMatch = activeHallId === 'all' || table.hall_id === activeHallId;
     return isActiveStatus && isHallMatch;
   });
@@ -75,7 +105,6 @@ const TablesGrid = ({ onSelectTable }) => {
           </div>
         </div>
 
-        {/* HALL TABS */}
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           <button
             onClick={() => setActiveHallId('all')}
@@ -102,7 +131,6 @@ const TablesGrid = ({ onSelectTable }) => {
         </div>
       </div>
 
-      {/* TABLES GRID */}
       <div className="p-6 overflow-y-auto pb-24">
         <p className="text-gray-500 mb-4 text-sm">Faol buyurtmalar: {filteredTables.length} ta</p>
         
