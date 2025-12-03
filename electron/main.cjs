@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { initDB } = require('./database.cjs'); // Baza
 const startServer = require('./server.cjs');  // Server
+const staffController = require('./controllers/staffController.cjs');
 
 // Controllerlarni import qilamiz
 const tableController = require('./controllers/tableController.cjs');
@@ -30,6 +31,12 @@ function createWindow() {
 }
 
 // --- IPC HANDLERS ---
+
+// --- YANGI: XODIMLAR VA LOGIN ---
+ipcMain.handle('get-users', () => staffController.getUsers());
+ipcMain.handle('save-user', (e, user) => staffController.saveUser(user));
+ipcMain.handle('delete-user', (e, id) => staffController.deleteUser(id));
+ipcMain.handle('login', (e, pin) => staffController.login(pin));
 
 // Zallar & Stollar
 ipcMain.handle('get-halls', () => tableController.getHalls());

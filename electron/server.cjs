@@ -10,6 +10,7 @@ const tableController = require('./controllers/tableController.cjs');
 const productController = require('./controllers/productController.cjs');
 const orderController = require('./controllers/orderController.cjs');
 const settingsController = require('./controllers/settingsController.cjs');
+const staffController = require('./controllers/staffController.cjs'); // YANGI
 
 function startServer() {
   const app = express();
@@ -36,6 +37,17 @@ function startServer() {
   });
 
   // --- API ---
+
+  // YANGI: LOGIN API
+  app.post('/api/login', (req, res) => {
+    try {
+      const { pin } = req.body;
+      const user = staffController.login(pin); // Bazadan tekshiramiz
+      res.json(user);
+    } catch (e) {
+      res.status(401).json({ error: "Noto'g'ri PIN kod" });
+    }
+  });
 
   app.get('/api/halls', (req, res) => {
     try { res.json(tableController.getHalls()); } catch (e) { res.status(500).json({ error: e.message }); }

@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Printer, Database, Store, Receipt, Percent, RefreshCw, ChefHat, Plus, Trash2 } from 'lucide-react';
+import { Save, Printer, Database, Store, Receipt, Percent, RefreshCw, ChefHat, Plus, Trash2, Users, Shield, Key } from 'lucide-react';
 
 const Settings = () => {
   const [activeTab, setActiveTab] = useState('general');
   const [loading, setLoading] = useState(false);
   const [kitchens, setKitchens] = useState([]);
+  const [users, setUsers] = useState([]); // Xodimlar ro'yxati
   
   const [newKitchen, setNewKitchen] = useState({ name: '', printer_ip: '192.168.1.', printer_port: 9100 });
+  const [newUser, setNewUser] = useState({ name: '', pin: '', role: 'waiter' }); // Yangi xodim
 
   const [settings, setSettings] = useState({
     restaurantName: "", address: "", phone: "", wifiPassword: "",
     serviceChargeType: "percent", serviceChargeValue: 0, receiptFooter: "", 
-    // YANGI: Kassa printeri uchun IP va Port
-    printerReceiptIP: "", 
-    printerReceiptPort: 9100
+    printerReceiptIP: "", printerReceiptPort: 9100
   });
 
   useEffect(() => {
@@ -29,12 +29,15 @@ const Settings = () => {
             ...prev, 
             ...sData, 
             serviceChargeValue: Number(sData.serviceChargeValue) || 0,
-            // Portni raqamga o'tkazamiz
             printerReceiptPort: Number(sData.printerReceiptPort) || 9100 
         }));
         
         const kData = await ipcRenderer.invoke('get-kitchens');
         setKitchens(kData);
+
+        // Xodimlarni yuklash
+        const uData = await ipcRenderer.invoke('get-users');
+        setUsers(uData);
      } catch (err) { console.error(err); }
   };
 
@@ -75,6 +78,31 @@ const Settings = () => {
      }
   };
 
+  // --- USER ACTIONS (YANGI) ---
+  const handleSaveUser = async (e) => {
+    e.preventDefault();
+    if (!newUser.name || !newUser.pin) return;
+    try {
+        const { ipcRenderer } = window.require('electron');
+        await ipcRenderer.invoke('save-user', newUser);
+        setNewUser({ name: '', pin: '', role: 'waiter' });
+        loadAllData();
+        alert("Xodim saqlandi!");
+    } catch (err) {
+        alert("Xatolik: " + err.message);
+    }
+  };
+
+  const handleDeleteUser = async (id) => {
+      if(window.confirm("Xodimni o'chirmoqchimisiz?")) {
+          try {
+              const { ipcRenderer } = window.require('electron');
+              await ipcRenderer.invoke('delete-user', id);
+              loadAllData();
+          } catch (err) { alert(err.message); }
+      }
+  };
+
   const handleBackup = async () => {
     if(window.confirm("Ma'lumotlar bazasidan nusxa olinsinmi?")) {
         alert("Backup funksiyasi tez orada qo'shiladi.");
@@ -88,6 +116,7 @@ const Settings = () => {
         <h2 className="text-xl font-bold text-gray-800 mb-6 px-2">Sozlamalar</h2>
         <div className="space-y-2">
           <button onClick={() => setActiveTab('general')} className={`w-full text-left px-4 py-3 rounded-xl font-medium flex items-center gap-3 transition-colors ${activeTab === 'general' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'}`}><Store size={20} /> Umumiy Ma'lumot</button>
+          <button onClick={() => setActiveTab('users')} className={`w-full text-left px-4 py-3 rounded-xl font-medium flex items-center gap-3 transition-colors ${activeTab === 'users' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'}`}><Users size={20} /> Xodimlar</button>
           <button onClick={() => setActiveTab('order')} className={`w-full text-left px-4 py-3 rounded-xl font-medium flex items-center gap-3 transition-colors ${activeTab === 'order' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'}`}><Percent size={20} /> Buyurtma va Xizmat</button>
           <button onClick={() => setActiveTab('kitchens')} className={`w-full text-left px-4 py-3 rounded-xl font-medium flex items-center gap-3 transition-colors ${activeTab === 'kitchens' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'}`}><ChefHat size={20} /> Oshxonalar & LAN</button>
           <button onClick={() => setActiveTab('printers')} className={`w-full text-left px-4 py-3 rounded-xl font-medium flex items-center gap-3 transition-colors ${activeTab === 'printers' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'}`}><Printer size={20} /> Kassa Printeri</button>
@@ -118,6 +147,67 @@ const Settings = () => {
                <div><label className="block text-sm font-bold text-gray-500 mb-1">Chekosti yozuvi</label><textarea rows="3" name="receiptFooter" value={settings.receiptFooter || ''} onChange={handleChange} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-blue-500 resize-none"></textarea></div>
             </div>
           </div>
+        )}
+
+        {/* USERS (XODIMLAR) - YANGI */}
+        {activeTab === 'users' && (
+            <div className="max-w-3xl space-y-6">
+                {/* Add User */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Users size={20} className="text-blue-500"/> Xodim Qo'shish</h3>
+                    <form onSubmit={handleSaveUser} className="grid grid-cols-12 gap-4 items-end">
+                        <div className="col-span-4">
+                            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Ism</label>
+                            <input required type="text" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} placeholder="Ali" className="w-full p-3 rounded-xl border border-gray-200 outline-none focus:border-blue-500 font-bold" />
+                        </div>
+                        <div className="col-span-3">
+                            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">PIN Kod</label>
+                            <div className="relative">
+                                <Key size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                                <input required type="text" maxLength="4" value={newUser.pin} onChange={e => setNewUser({...newUser, pin: e.target.value.replace(/\D/g,'')})} placeholder="1234" className="w-full pl-9 pr-3 py-3 rounded-xl border border-gray-200 outline-none focus:border-blue-500 font-mono text-center tracking-widest" />
+                            </div>
+                        </div>
+                        <div className="col-span-3">
+                            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Rol</label>
+                            <select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} className="w-full p-3 rounded-xl border border-gray-200 outline-none focus:border-blue-500">
+                                <option value="waiter">Ofitsiant</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div className="col-span-2">
+                            <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700">Qo'shish</button>
+                        </div>
+                    </form>
+                </div>
+
+                {/* Users List */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4">Xodimlar Ro'yxati</h3>
+                    <div className="space-y-2">
+                        {users.map(u => (
+                            <div key={u.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200 group">
+                                <div className="flex items-center gap-4">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${u.role === 'admin' ? 'bg-purple-500' : 'bg-green-500'}`}>
+                                        {u.role === 'admin' ? <Shield size={18} /> : <Users size={18} />}
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-gray-800">{u.name}</p>
+                                        <p className="text-xs text-gray-500 font-mono flex items-center gap-1">
+                                            PIN: ••••
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className={`text-xs font-bold px-2 py-1 rounded uppercase ${u.role === 'admin' ? 'bg-purple-100 text-purple-600' : 'bg-green-100 text-green-600'}`}>
+                                        {u.role}
+                                    </span>
+                                    <button onClick={() => handleDeleteUser(u.id)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={20}/></button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
         )}
 
         {/* ORDER */}
@@ -181,7 +271,7 @@ const Settings = () => {
           </div>
         )}
 
-        {/* PRINTERS (Receipt) - YANGILANDI */}
+        {/* PRINTERS */}
         {activeTab === 'printers' && (
           <div className="max-w-2xl space-y-6">
              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">

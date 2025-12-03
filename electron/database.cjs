@@ -45,8 +45,24 @@ function initDB() {
       printer_port INTEGER DEFAULT 9100
     )
   `);
+
+  // --- YANGI: XODIMLAR JADVALI ---
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      pin TEXT NOT NULL UNIQUE,
+      role TEXT DEFAULT 'waiter' -- 'admin' yoki 'waiter'
+    )
+  `);
   
-  // Default Data
+  // Default Admin (Agar hech kim bo'lmasa)
+  const stmtUsers = db.prepare('SELECT count(*) as count FROM users');
+  if (stmtUsers.get().count === 0) {
+     db.prepare("INSERT INTO users (name, pin, role) VALUES ('Admin', '1111', 'admin')").run();
+  }
+
+  // Default Kitchens
   const stmtK = db.prepare('SELECT count(*) as count FROM kitchens');
   if (stmtK.get().count === 0) {
      const insertK = db.prepare('INSERT INTO kitchens (name, printer_ip) VALUES (?, ?)');

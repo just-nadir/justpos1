@@ -1,23 +1,25 @@
 import React from 'react';
-// PieChart ni importga qo'shdik
-import { LayoutGrid, UtensilsCrossed, History, Settings, LogOut, Square, Users, FileText, PieChart } from 'lucide-react';
+import { LayoutGrid, UtensilsCrossed, Settings, LogOut, Square, Users, FileText, PieChart } from 'lucide-react';
 
-const Sidebar = ({ activePage, onNavigate }) => {
+const Sidebar = ({ activePage, onNavigate, onLogout, user }) => {
   const menuItems = [
     { id: 'pos', icon: <LayoutGrid size={24} />, label: "Kassa" },
     { id: 'menu', icon: <UtensilsCrossed size={24} />, label: "Menyu" },
     { id: 'tables', icon: <Square size={24} />, label: "Zallar" },
     { id: 'customers', icon: <Users size={24} />, label: "Mijozlar" },
     { id: 'debtors', icon: <FileText size={24} />, label: "Qarzdorlar" },
-    { id: 'reports', icon: <PieChart size={24} />, label: "Xisobotlar" }, // Bu yerda PieChart ishlatilgan
+    { id: 'reports', icon: <PieChart size={24} />, label: "Xisobotlar" },
     { id: 'settings', icon: <Settings size={24} />, label: "Sozlamalar" },
   ];
 
+  // Agar user oddiy ofitsiant bo'lsa, Sozlamalar va Hisobotlarni yashirish mumkin
+  // Hozircha hammasi ochiq qolaversin
+
   return (
     <div className="w-24 bg-white h-screen flex flex-col items-center py-4 shadow-lg z-10">
-      {/* Logo */}
-      <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-xl mb-8">
-        P
+      {/* Logo / User Initials */}
+      <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-xl mb-8" title={user?.name}>
+        {user?.name ? user.name.charAt(0).toUpperCase() : 'P'}
       </div>
 
       {/* Menu Items */}
@@ -38,9 +40,13 @@ const Sidebar = ({ activePage, onNavigate }) => {
         ))}
       </div>
 
-      {/* Bottom Actions */}
+      {/* Bottom Actions (LOGOUT) */}
       <div className="flex flex-col gap-4 w-full px-2 mb-4">
-        <button className="flex flex-col items-center justify-center p-3 text-red-400 hover:text-red-600 rounded-xl hover:bg-red-50">
+        <button 
+          onClick={onLogout} 
+          className="flex flex-col items-center justify-center p-3 text-red-400 hover:text-red-600 rounded-xl hover:bg-red-50 transition-colors"
+          title="Chiqish"
+        >
           <LogOut size={24} />
         </button>
       </div>

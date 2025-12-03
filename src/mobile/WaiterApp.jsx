@@ -1,78 +1,41 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
-import { io } from 'socket.io-client';
-import { Users, Clock, ChevronLeft, ShoppingBag, Trash2, Plus, Minus, CheckCircle, X } from 'lucide-react';
+import { Users, Clock, ChevronLeft, ShoppingBag, Trash2, Plus, Minus, CheckCircle, X, LogOut, User } from 'lucide-react';
 
-const API_URL = window.location.protocol + '//' + window.location.hostname + ':3000/api';
-const SOCKET_URL = window.location.protocol + '//' + window.location.hostname + ':3000';
+// Hooks
+import { useSocketData } from '../hooks/useSocketData';
+import { useCart } from '../hooks/useCart';
+import { useMenu } from '../hooks/useMenu';
+import MobilePinLogin from './MobilePinLogin'; // Yangi import
 
 const WaiterApp = () => {
-  const [view, setView] = useState('tables'); 
-  const [tables, setTables] = useState([]);
-  const [activeTable, setActiveTable] = useState(null);
-  
-  // Settings
-  const [serviceType, setServiceType] = useState('percent'); 
+  // --- AUTH STATE ---
+  const [user, setUser] = useState(null); // Tizimga kirgan ofitsiant
 
-  // Guest Modal
+  // Mavjud statelar
+  const [view, setView] = useState('tables'); 
+  const [activeTable, setActiveTable] = useState(null);
   const [showGuestModal, setShowGuestModal] = useState(false);
   const [guestCount, setGuestCount] = useState(2); 
 
-  // Menu Data
-  const [categories, setCategories] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [activeCategory, setActiveCategory] = useState(null);
-  const [loading, setLoading] = useState(false);
+  // Hooks
+  const { tables, serviceType, loadTables, API_URL } = useSocketData();
+  const { cart, addToCart, removeFromCart, clearCart, cartTotal, cartCount } = useCart();
+  const { categories, products, activeCategory, setActiveCategory, loading, loadMenu } = useMenu(API_URL);
 
-  // Cart
-  const [cart, setCart] = useState([]); 
-
-  // --- INITIAL DATA & SOCKET ---
-  const loadTables = async () => {
-      try {
-          const res = await axios.get(`${API_URL}/tables`);
-          setTables(res.data);
-      } catch (err) { console.error(err); }
-  };
-
-  const loadSettings = async () => {
-      try {
-          const sRes = await axios.get(`${API_URL}/settings`);
-          if (sRes.data.serviceChargeType) setServiceType(sRes.data.serviceChargeType);
-      } catch (err) { console.error(err); }
+  // --- AGAR LOGIN QILMAGAN BO'LSA ---
+  if (!user) {
+    return <MobilePinLogin apiUrl={API_URL} onLogin={(u) => setUser(u)} />;
   }
 
-  useEffect(() => {
-    loadTables();
-    loadSettings();
-
-    const socket = io(SOCKET_URL);
-    socket.on('update', (data) => {
-        if (data.type === 'tables') {
-            loadTables(); 
-        }
-    });
-
-    return () => socket.disconnect();
-  }, []);
-
-  const loadMenu = async () => {
-    setLoading(true);
-    try {
-      if (categories.length === 0) {
-          const [catRes, prodRes] = await Promise.all([
-            axios.get(`${API_URL}/categories`),
-            axios.get(`${API_URL}/products`)
-          ]);
-          setCategories(catRes.data);
-          setProducts(prodRes.data);
-          if (catRes.data.length > 0) setActiveCategory(catRes.data[0].id);
-      }
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
-  };
-
   // --- LOGIC ---
+
+  const handleLogout = () => {
+    if(window.confirm("Tizimdan chiqasizmi?")) {
+        setUser(null);
+        setView('tables');
+    }
+  };
 
   const handleTableClick = (table) => {
     if (table.status === 'free') {
@@ -93,46 +56,31 @@ const WaiterApp = () => {
     setShowGuestModal(false);
   };
 
-  const openMenu = async (table) => {
-    setCart([]);
+  const openMenu = (table) => {
+    clearCart();
     setView('menu');
     loadMenu();
   };
 
-  const addToCart = (product) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
-      if (existing) return prev.map(item => item.id === product.id ? { ...item, qty: item.qty + 1 } : item);
-      return [...prev, { ...product, qty: 1 }];
-    });
-  };
-
-  const removeFromCart = (productId) => {
-    setCart(prev => prev.map(item => item.id === productId ? { ...item, qty: Math.max(0, item.qty - 1) } : item).filter(item => item.qty > 0));
-  };
-
-  // --- YANGI: BULK SEND ---
   const sendOrder = async () => {
     if (!activeTable || cart.length === 0) return;
     if(!window.confirm(`Jami ${cartTotal.toLocaleString()} so'm. Yuboraymi?`)) return;
 
     try {
-      // 1. Mehmonlar soni (agar o'zgargan bo'lsa)
       await axios.post(`${API_URL}/tables/guests`, {
           tableId: activeTable.id,
           count: activeTable.guests 
       });
 
-      // 2. BULK REQUEST (Bitta so'rov bilan hammasini yuboramiz)
       await axios.post(`${API_URL}/orders/bulk-add`, {
           tableId: activeTable.id,
-          items: cart
+          items: cart,
+          waiterId: user.id // Ofitsiant ID sini ham qo'shib qo'yamiz (keyinchalik kerak bo'ladi)
       });
       
       alert("Buyurtma qabul qilindi! ✅");
-      setCart([]);
+      clearCart();
       setView('tables');
-      // loadData() shart emas, socket hal qiladi
     } catch (err) {
       console.error(err);
       alert("Xatolik: Internetni tekshiring");
@@ -148,9 +96,6 @@ const WaiterApp = () => {
       setGuestCount(activeTable.guests || 2);
       setShowGuestModal(true);
   };
-
-  const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
-  const cartCount = cart.reduce((acc, item) => acc + item.qty, 0);
 
   // --- UI COMPONENTS ---
 
@@ -187,19 +132,21 @@ const WaiterApp = () => {
       )
   };
 
+  // TABLES VIEW
   if (view === 'tables') {
     return (
       <div className="min-h-screen bg-gray-100 pb-20">
         <GuestModal />
         <div className="bg-blue-600 text-white p-4 sticky top-0 z-10 shadow-md flex justify-between items-center">
           <div>
-            <h1 className="text-xl font-bold">Ofitsiant</h1>
-            <p className="text-xs text-blue-200 flex items-center gap-1">{serviceType === 'fixed' ? '📌 Fixed Service' : 'Percent Service'}</p>
+            <h1 className="text-xl font-bold flex items-center gap-2">
+                <User size={20} className="opacity-80"/> {user.name}
+            </h1>
+            <p className="text-xs text-blue-200">Ofitsiant Paneli</p>
           </div>
-          <div className="flex gap-2">
-             <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse self-center"></div>
-             <span className="text-xs text-green-100 self-center">Live</span>
-          </div>
+          <button onClick={handleLogout} className="p-2 bg-blue-500 rounded-full active:scale-95 text-white hover:bg-red-500 transition-colors">
+              <LogOut size={20}/>
+          </button>
         </div>
 
         <div className="p-3 grid grid-cols-2 gap-3">
@@ -228,6 +175,7 @@ const WaiterApp = () => {
     );
   }
 
+  // MENU & CART VIEW
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col h-screen overflow-hidden">
       <GuestModal />
@@ -239,7 +187,7 @@ const WaiterApp = () => {
         <div className="flex-1">
           <h2 className="font-bold text-lg leading-none">{activeTable?.name}</h2>
           <button onClick={updateGuestsInMenu} className="text-xs text-blue-600 flex items-center gap-1 font-bold mt-0.5 active:opacity-50">
-             <Users size={12}/> {activeTable?.guests} mehmon (o'zgartirish)
+             <Users size={12}/> {activeTable?.guests} mehmon
           </button>
         </div>
         {cartCount > 0 && (
