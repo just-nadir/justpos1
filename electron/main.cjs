@@ -1,5 +1,16 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
+const log = require('electron-log'); // IMPORT QILINDI
+
+// --- LOGGER SOZLAMALARI ---
+// Log fayli joylashuvi: C:\Users\User\AppData\Roaming\my-pos\logs\logs.txt (Windowsda)
+log.transports.file.level = 'info';
+log.transports.file.fileName = 'logs.txt'; // Fayl nomi
+log.transports.file.format = '[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}] {text}';
+
+// Console funksiyalarini logga yo'naltiramiz
+Object.assign(console, log.functions);
+
 const { initDB } = require('./database.cjs'); 
 const startServer = require('./server.cjs');  
 
@@ -11,25 +22,24 @@ const userController = require('./controllers/userController.cjs');
 const settingsController = require('./controllers/settingsController.cjs');
 const staffController = require('./controllers/staffController.cjs');
 
-// --- MUHIM: XATOLIKLARNI USHLAB QOLISH (CRASH OLDINI OLISH) ---
+// --- XATOLIKLARNI USHLASH (LOGGA YOZISH) ---
 process.on('uncaughtException', (error) => {
-  console.error('Kutilmagan xatolik (Main):', error);
-  // Bu yerda xatolik oynasi chiqishini bloklaymiz
+  log.error('KRITIK XATOLIK (Main):', error);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Ushlanmagan Promise xatoligi:', reason);
+process.on('unhandledRejection', (reason) => {
+  log.error('Ushlanmagan Promise:', reason);
 });
 
 app.disableHardwareAcceleration();
 
 function createWindow() {
-  // ... (eski kod o'zgarishsiz)
   try {
     initDB();
     startServer();
+    log.info("Dastur ishga tushdi. Baza va Server yondi."); // Log
   } catch (err) {
-    console.error("Boshlang'ich yuklashda xato:", err);
+    log.error("Boshlang'ich yuklashda xato:", err);
   }
 
   const win = new BrowserWindow({
@@ -44,16 +54,16 @@ function createWindow() {
   
   win.loadURL('http://localhost:5173');
   
-  // Renderer jarayoni qulasa, qayta yuklash
   win.webContents.on('render-process-gone', (event, details) => {
-    console.error('Renderer jarayoni o\'ldi:', details.reason);
+    log.error('Renderer jarayoni quladi:', details.reason);
     if (details.reason === 'crashed') {
         win.reload();
     }
   });
 }
 
-// ... (qolgan IPC handlerlar o'zgarishsiz) ...
+// ... IPC Handlerlar (o'zgarishsiz qoladi, chunki console.log endi faylga yozadi) ...
+
 // Zallar & Stollar
 ipcMain.handle('get-halls', () => tableController.getHalls());
 ipcMain.handle('add-hall', (e, name) => tableController.addHall(name));
@@ -108,4 +118,7 @@ app.whenReady().then(() => {
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('window-all-closed', () => { 
+    log.info("Dastur yopildi.");
+    if (process.platform !== 'darwin') app.quit(); 
+});

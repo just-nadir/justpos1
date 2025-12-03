@@ -1,4 +1,6 @@
 const { db, notify } = require('../database.cjs');
+const printerService = require('../services/printerService.cjs');
+const log = require('electron-log'); // Log
 
 module.exports = {
   getTableItems: (id) => db.prepare('SELECT * FROM order_items WHERE table_id = ?').all(id),
@@ -41,22 +43,45 @@ module.exports = {
     return res;
   },
 
-  checkout: (data) => {
+  checkout: async (data) => {
     const { tableId, total, subtotal, discount, paymentMethod, customerId, items } = data;
     const date = new Date().toISOString();
+    
+    // Tranzaksiya
     const performCheckout = db.transaction(() => {
       db.prepare(`INSERT INTO sales (date, total_amount, subtotal, discount, payment_method, customer_id, items_json) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(date, total, subtotal, discount, paymentMethod, customerId, JSON.stringify(items));
+      
       if (paymentMethod === 'debt' && customerId) {
         db.prepare('UPDATE customers SET debt = debt + ? WHERE id = ?').run(total, customerId);
         db.prepare('INSERT INTO debt_history (customer_id, amount, type, date, comment) VALUES (?, ?, ?, ?, ?)').run(customerId, total, 'debt', date, 'Savdo (Nasiya)');
       }
+      
       db.prepare('DELETE FROM order_items WHERE table_id = ?').run(tableId);
       db.prepare("UPDATE tables SET status = 'free', guests = 0, start_time = NULL, total_amount = 0 WHERE id = ?").run(tableId);
     });
+
     const res = performCheckout();
+    
+    // LOG YOZISH
+    log.info(`SAVDO: Stol ID: ${tableId}, Jami: ${total}, To'lov: ${paymentMethod}, Mijoz ID: ${customerId || 'Yo\'q'}`);
+
     notify('tables', null);
     notify('sales', null);
     if(customerId) notify('customers', null);
+
+    const tableName = db.prepare('SELECT name FROM tables WHERE id = ?').get(tableId)?.name || "Stol";
+    const service = total - (subtotal - discount);
+
+    printerService.printOrderReceipt({
+        tableName,
+        items,
+        subtotal,
+        total,
+        discount,
+        service,
+        paymentMethod
+    }).catch(err => log.error("Printer xatosi:", err)); // Xatoni logga yozamiz
+
     return res;
   },
   
